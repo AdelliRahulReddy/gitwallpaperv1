@@ -11,42 +11,38 @@ import 'screens/main_navigation.dart';
 /// Global key to restart app when theme changes
 final GlobalKey<_MyAppState> appKey = GlobalKey<_MyAppState>();
 
-/// ✅ Background task callback - runs every 15 minutes (testing mode)
-/// This is called by WorkManager when the scheduled task executes
+/// ✅ Background task callback - runs daily via WorkManager
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
+    WidgetsFlutterBinding.ensureInitialized();
+
     debugPrint('═══════════════════════════════════════════════════════');
-    debugPrint('Background wallpaper update started');
-    debugPrint('Task: $task');
+    debugPrint('🔄 Background wallpaper update started');
+    debugPrint('📋 Task: $task');
     debugPrint('═══════════════════════════════════════════════════════');
 
     try {
-      // ✅ Initialize preferences in background context
       await AppPreferences.init();
-      debugPrint('✓ Preferences initialized');
+      debugPrint('✅ Preferences initialized');
 
-      // ✅ Get user's wallpaper target preference
       final target = AppPreferences.getWallpaperTarget();
-      debugPrint('✓ Wallpaper target: $target');
+      debugPrint('🎯 Wallpaper target: $target');
 
-      // ✅ Fetch latest data and set wallpaper
       final success = await WallpaperService.refreshAndSetWallpaper(
         target: target,
       );
 
       if (success) {
-        debugPrint('✓ Background wallpaper update completed successfully');
+        debugPrint('✅ Background wallpaper update completed successfully');
         return Future.value(true);
       } else {
-        debugPrint(
-          '✗ Wallpaper update returned false (might have skipped - already updated today)',
-        );
-        return Future.value(true); // Still return true (not an error)
+        debugPrint('⚠️ Wallpaper update skipped or failed');
+        return Future.value(true);
       }
     } catch (e, stackTrace) {
-      debugPrint('✗ Background wallpaper update failed: $e');
-      debugPrint('Stack trace: $stackTrace');
+      debugPrint('❌ Background wallpaper update failed: $e');
+      debugPrint('📍 Stack trace: $stackTrace');
       return Future.value(false);
     }
   });
@@ -55,27 +51,24 @@ void callbackDispatcher() {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  debugPrint('App starting...');
+  debugPrint('🚀 App starting...');
 
-  // ✅ Initialize preferences first
+  // Initialize preferences first
   await AppPreferences.init();
-  debugPrint('✓ Preferences initialized');
+  debugPrint('✅ Preferences initialized');
 
-  // ✅ Initialize WorkManager for background updates
-  await Workmanager().initialize(
-    callbackDispatcher,
-    isInDebugMode: true, // ✅ CHANGED: Set to true to see WorkManager logs
-  );
-  debugPrint('✓ WorkManager initialized');
+  // Initialize WorkManager
+  await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+  debugPrint('✅ WorkManager initialized');
 
-  // ✅ Register periodic background task
+  // Register periodic background task
   await Workmanager().registerPeriodicTask(
     AppConstants.wallpaperTaskName,
     AppConstants.wallpaperTaskTag,
     frequency: AppConstants.updateInterval,
-    existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
+    existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
     constraints: Constraints(
-      networkType: NetworkType.connected, // Requires internet
+      networkType: NetworkType.connected,
       requiresBatteryNotLow: true,
       requiresStorageNotLow: true,
     ),
@@ -83,24 +76,23 @@ void main() async {
     backoffPolicyDelay: const Duration(minutes: 15),
   );
 
-  // ✅ FIXED: Show minutes instead of hours for intervals less than 1 hour
   if (AppConstants.updateInterval.inMinutes < 60) {
     debugPrint(
-      '✓ WorkManager task registered (interval: ${AppConstants.updateInterval.inMinutes} minutes)',
+      '✅ WorkManager task registered (interval: ${AppConstants.updateInterval.inMinutes} minutes)',
     );
   } else {
     debugPrint(
-      '✓ WorkManager task registered (interval: ${AppConstants.updateInterval.inHours} hours)',
+      '✅ WorkManager task registered (interval: ${AppConstants.updateInterval.inHours} hours)',
     );
   }
 
-  // ✅ Set status bar style
+  // Set status bar style
   _setSystemUI();
 
   runApp(MyApp(key: appKey));
 }
 
-/// ✅ Configure system UI (status bar, navigation bar)
+/// Configure system UI
 void _setSystemUI() {
   final isDarkMode = AppPreferences.getDarkMode();
 
@@ -124,7 +116,6 @@ class MyApp extends StatefulWidget {
   @override
   State<MyApp> createState() => _MyAppState();
 
-  /// Call this to rebuild the entire app (e.g., after theme change)
   static void restartApp(BuildContext context) {
     appKey.currentState?.restartApp();
   }
@@ -162,26 +153,121 @@ class _MyAppState extends State<MyApp> {
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
         themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
-        home: _getInitialScreen(),
+        home: const AppInitializer(), // ✅ NEW: Auto-detect device first
       ),
     );
   }
+}
 
-  Widget _getInitialScreen() {
+// ══════════════════════════════════════════════════════════════════════════
+// 🚀 APP INITIALIZER - Detects device then navigates
+// ══════════════════════════════════════════════════════════════════════════
+
+class AppInitializer extends StatefulWidget {
+  const AppInitializer({Key? key}) : super(key: key);
+
+  @override
+  State<AppInitializer> createState() => _AppInitializerState();
+}
+
+class _AppInitializerState extends State<AppInitializer> {
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    // Wait for first frame to get accurate screen dimensions
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Auto-detect device dimensions
+      AppConstants.initializeFromContext(context);
+
+      // Small delay to show splash
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Navigate to appropriate screen
+      if (!mounted) return;
+      _navigateToHome();
+    });
+  }
+
+  void _navigateToHome() {
     final username = AppPreferences.getUsername();
-    final token = AppPreferences.getToken();
     final cachedData = AppPreferences.getCachedData();
 
-    // ✅ If user has completed setup and has cached data, go to main screen
-    if (username != null &&
-        username.isNotEmpty &&
-        token != null &&
-        token.isNotEmpty &&
-        cachedData != null) {
-      return const MainNavigation();
+    Widget destination;
+
+    if (username != null && username.isNotEmpty && cachedData != null) {
+      destination = const MainNavigation();
+    } else {
+      destination = const OnboardingScreen();
     }
 
-    // ✅ Show onboarding for new users
-    return const OnboardingScreen();
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => destination),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = AppPreferences.getDarkMode();
+
+    return Scaffold(
+      backgroundColor: isDarkMode ? const Color(0xFF0D1117) : Colors.white,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // App Icon
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: context.primaryColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(
+                Icons.hub_outlined,
+                size: 48,
+                color: context.primaryColor,
+              ),
+            ),
+
+            SizedBox(height: AppTheme.spacing24),
+
+            // App Name
+            Text(
+              'GitHub Wallpaper',
+              style: context.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            SizedBox(height: AppTheme.spacing8),
+
+            // Loading indicator
+            SizedBox(
+              width: 120,
+              child: LinearProgressIndicator(
+                backgroundColor: context.borderColor,
+                valueColor: AlwaysStoppedAnimation<Color>(context.primaryColor),
+              ),
+            ),
+
+            SizedBox(height: AppTheme.spacing12),
+
+            // Status text
+            Text(
+              'Initializing...',
+              style: context.textTheme.bodySmall?.copyWith(
+                color: context.theme.hintColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

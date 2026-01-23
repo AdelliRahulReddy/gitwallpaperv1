@@ -13,6 +13,7 @@ class StatsScreen extends StatefulWidget {
 
 class _StatsScreenState extends State<StatsScreen> {
   CachedContributionData? _cachedData;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -20,228 +21,184 @@ class _StatsScreenState extends State<StatsScreen> {
     _loadData();
   }
 
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   void _loadData() {
-    try {
-      setState(() {
+    setState(() {
+      try {
         _cachedData = AppPreferences.getCachedData();
-      });
-    } catch (e) {
-      debugPrint('StatsScreen: Error loading data: $e');
-      setState(() {
+      } catch (e) {
         _cachedData = null;
-      });
-    }
+      }
+    });
+  }
+
+  String _getMotivation(int streak) {
+    if (streak == 0) return "Let's start a streak today! 🚀";
+    if (streak < 3) return "Warming up the engines... 🏎️";
+    if (streak < 7) return "You're consistent! Keep it up ⚡";
+    if (streak < 14) return "You are on FIRE! 🔥";
+    if (streak < 30) return "Unstoppable force! 🌪️";
+    return "Legendary Status 👑";
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.backgroundColor,
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            // Header
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.all(context.screenPadding.left),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Statistics',
-                      style: context.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: AppTheme.spacing4),
-                    Text(
-                      '${AppDateUtils.getCurrentMonthName()} ${DateTime.now().year}',
-                      style: context.textTheme.bodyMedium?.copyWith(
-                        color: context.colorScheme.onBackground.withOpacity(
-                          0.6,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+      body: _cachedData == null
+          ? _buildEmptyState()
+          : CustomScrollView(
+              controller: _scrollController,
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                // 1. HEADER
+                _buildHeader(),
 
-            // Content
-            if (_cachedData != null && _cachedData!.days.isNotEmpty)
-              SliverPadding(
-                padding: context.screenPadding,
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    // Main Stats Grid (2x2)
-                    _buildMainStatsGrid(),
-
-                    SizedBox(height: context.cardSpacing),
-
-                    // Monthly Overview Card
-                    _buildMonthlyOverviewCard(),
-
-                    SizedBox(height: context.cardSpacing),
-
-                    // Contribution Breakdown
-                    _buildContributionBreakdown(),
-
-                    SizedBox(height: context.cardSpacing),
-
-                    // Weekly Activity
-                    _buildWeeklyActivity(),
-
-                    SizedBox(height: context.cardSpacing),
-
-                    // Best Day Card
-                    _buildBestDayCard(),
-
-                    const SizedBox(height: AppTheme.spacing24),
-                  ]),
-                ),
-              )
-            else
-              SliverFillRemaining(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.bar_chart_outlined,
-                        size: 64,
-                        color: context.colorScheme.onBackground.withOpacity(
-                          0.3,
-                        ),
-                      ),
-                      const SizedBox(height: AppTheme.spacing16),
-                      Text(
-                        'No data available',
-                        style: context.textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: AppTheme.spacing8),
-                      Text(
-                        'Sync your GitHub data first',
-                        style: context.textTheme.bodySmall,
-                      ),
-                    ],
+                // 2. MOTIVATION BANNER
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(
+                    AppTheme.spacing20,
+                    AppTheme.spacing16,
+                    AppTheme.spacing20,
+                    AppTheme.spacing16,
                   ),
+                  sliver: SliverToBoxAdapter(child: _buildMotivationCard()),
                 ),
-              ),
-          ],
-        ),
-      ),
+
+                // 3. WEEKLY CHART
+                SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: AppTheme.spacing20),
+                  sliver: SliverToBoxAdapter(child: _buildWeeklyChart()),
+                ),
+
+                SliverToBoxAdapter(child: SizedBox(height: AppTheme.spacing20)),
+
+                // 4. STATS GRID
+                SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: AppTheme.spacing20),
+                  sliver: SliverToBoxAdapter(child: _buildMainStatsGrid()),
+                ),
+
+                SliverToBoxAdapter(child: SizedBox(height: AppTheme.spacing20)),
+
+                // 5. BEST DAY CARD
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(
+                    AppTheme.spacing20,
+                    0,
+                    AppTheme.spacing20,
+                    100, // Bottom padding for nav bar
+                  ),
+                  sliver: SliverToBoxAdapter(child: _buildBestDayCard()),
+                ),
+              ],
+            ),
     );
   }
 
-  Widget _buildMainStatsGrid() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cardWidth = (constraints.maxWidth - context.cardSpacing) / 2;
+  // ════════════════════════════════════════════════════════════════════════
+  // 📋 HEADER - FIXED (No overflow)
+  // ════════════════════════════════════════════════════════════════════════
 
-        return Wrap(
-          spacing: context.cardSpacing,
-          runSpacing: context.cardSpacing,
-          children: [
-            _buildStatCard(
-              icon: Icons.commit_outlined,
-              value: '${_cachedData!.totalContributions}',
-              label: 'Total Contributions',
-              color: const Color(0xFF26A641),
-              width: cardWidth,
-            ),
-            _buildStatCard(
-              icon: Icons.local_fire_department_outlined,
-              value: '${_cachedData!.currentStreak}',
-              label: 'Current Streak',
-              color: const Color(0xFFFF9500),
-              width: cardWidth,
-              suffix: ' days',
-            ),
-            _buildStatCard(
-              icon: Icons.trending_up_outlined,
-              value: '${_cachedData!.longestStreak}',
-              label: 'Longest Streak',
-              color: const Color(0xFFA371F7),
-              width: cardWidth,
-              suffix: ' days',
-            ),
-            _buildStatCard(
-              icon: Icons.calendar_today_outlined,
-              value: '${_cachedData!.todayCommits}',
-              label: 'Today',
-              color: const Color(0xFF58A6FF),
-              width: cardWidth,
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildStatCard({
-    required IconData icon,
-    required String value,
-    required String label,
-    required Color color,
-    required double width,
-    String suffix = '',
-  }) {
-    return Container(
-      width: width,
-      padding: const EdgeInsets.all(AppTheme.spacing16),
-      decoration: BoxDecoration(
-        color: context.surfaceColor,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-        border: Border.all(
-          color: context.colorScheme.onBackground.withOpacity(0.1),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(AppTheme.spacing10),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-            ),
-            child: Icon(icon, color: color, size: 24),
+  Widget _buildHeader() {
+    return SliverToBoxAdapter(
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            AppTheme.spacing20,
+            AppTheme.spacing16,
+            AppTheme.spacing20,
+            AppTheme.spacing12,
           ),
-
-          const SizedBox(height: AppTheme.spacing16),
-
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                value,
-                style: context.textTheme.headlineMedium?.copyWith(
+                'Statistics',
+                style: context.textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: color,
                 ),
               ),
-              if (suffix.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(
-                    left: AppTheme.spacing4,
-                    bottom: AppTheme.spacing4,
-                  ),
-                  child: Text(
-                    suffix,
-                    style: context.textTheme.bodySmall?.copyWith(
-                      color: context.colorScheme.onBackground.withOpacity(0.6),
-                    ),
-                  ),
+              SizedBox(height: AppTheme.spacing4),
+              Text(
+                '${AppDateUtils.getCurrentMonthName()} ${DateTime.now().year}',
+                style: context.textTheme.bodySmall?.copyWith(
+                  color: context.theme.hintColor,
                 ),
+              ),
             ],
           ),
+        ),
+      ),
+    );
+  }
 
-          const SizedBox(height: AppTheme.spacing4),
+  // ════════════════════════════════════════════════════════════════════════
+  // 🔥 MOTIVATION CARD
+  // ════════════════════════════════════════════════════════════════════════
 
-          Text(
-            label,
-            style: context.textTheme.bodyMedium?.copyWith(
-              color: context.colorScheme.onBackground.withOpacity(0.7),
+  Widget _buildMotivationCard() {
+    final streak = _cachedData!.currentStreak;
+
+    return Container(
+      padding: EdgeInsets.all(AppTheme.spacing16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppTheme.brandYellow.withOpacity(0.15),
+            context.theme.cardColor,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+        border: Border.all(color: AppTheme.brandYellow.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(AppTheme.spacing12),
+            decoration: BoxDecoration(
+              color: AppTheme.brandYellow.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.local_fire_department,
+              color: AppTheme.brandYellow,
+              size: 24,
+            ),
+          ),
+          SizedBox(width: AppTheme.spacing12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _getMotivation(streak),
+                  style: context.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: context.textTheme.bodyLarge?.color,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                SizedBox(height: AppTheme.spacing4),
+                Text(
+                  '$streak Day Streak',
+                  style: context.textTheme.bodySmall?.copyWith(
+                    color: AppTheme.brandYellow,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -249,399 +206,372 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  Widget _buildMonthlyOverviewCard() {
-    final monthName = AppDateUtils.getCurrentMonthName();
-    final daysInMonth = AppDateUtils.getDaysInCurrentMonth();
-    final currentDay = AppDateUtils.getCurrentDayOfMonth();
+  // ════════════════════════════════════════════════════════════════════════
+  // 📊 WEEKLY CHART
+  // ════════════════════════════════════════════════════════════════════════
 
-    // ✅ FIXED: Guard against division by zero
-    final progress = currentDay > 0 ? currentDay / daysInMonth : 0.0;
-    final averageDaily = currentDay > 0
-        ? _cachedData!.totalContributions / currentDay
-        : 0.0;
-    final projectedTotal = currentDay > 0
-        ? (averageDaily * daysInMonth).round()
-        : 0;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppTheme.spacing20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$monthName Overview',
-                      style: context.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: AppTheme.spacing4),
-                    Text(
-                      'Day $currentDay of $daysInMonth',
-                      style: context.textTheme.bodyMedium?.copyWith(
-                        color: context.colorScheme.onBackground.withOpacity(
-                          0.6,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppTheme.spacing12,
-                    vertical: AppTheme.spacing8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: context.primaryColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                  ),
-                  child: Text(
-                    '${(progress * 100).toInt()}%',
-                    style: context.textTheme.titleMedium?.copyWith(
-                      color: context.primaryColor,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: AppTheme.spacing20),
-
-            // Progress Bar
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppTheme.spacing8),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 12,
-                backgroundColor: context.colorScheme.onBackground.withOpacity(
-                  0.1,
-                ),
-                valueColor: AlwaysStoppedAnimation(context.primaryColor),
-              ),
-            ),
-
-            const SizedBox(height: AppTheme.spacing20),
-
-            // Metrics Row
-            Row(
-              children: [
-                Expanded(
-                  child: _buildMetricItem(
-                    label: 'Average/Day',
-                    value: averageDaily.toStringAsFixed(1),
-                    color: const Color(0xFF58A6FF),
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 40,
-                  color: context.colorScheme.onBackground.withOpacity(0.1),
-                ),
-                Expanded(
-                  child: _buildMetricItem(
-                    label: 'Projected Total',
-                    value: '$projectedTotal',
-                    color: const Color(0xFF26A641),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMetricItem({
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: context.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-        const SizedBox(height: AppTheme.spacing4),
-        Text(
-          label,
-          style: context.textTheme.bodySmall,
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildContributionBreakdown() {
-    final activeDays = _cachedData!.dailyContributions.values
-        .where((count) => count > 0)
-        .length;
-    final inactiveDays = AppDateUtils.getCurrentDayOfMonth() - activeDays;
-
-    // ✅ FIXED: Safe reduce with fallback
-    final maxDaily = _cachedData!.dailyContributions.values.isNotEmpty
-        ? _cachedData!.dailyContributions.values.reduce(
-            (max, count) => count > max ? count : max,
-          )
-        : 0;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppTheme.spacing20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Contribution Breakdown',
-              style: context.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-
-            const SizedBox(height: AppTheme.spacing20),
-
-            _buildBreakdownRow(
-              icon: Icons.check_circle_outline,
-              label: 'Active Days',
-              value: '$activeDays',
-              color: const Color(0xFF26A641),
-            ),
-
-            const SizedBox(height: AppTheme.spacing12),
-
-            _buildBreakdownRow(
-              icon: Icons.cancel_outlined,
-              label: 'Inactive Days',
-              value: '$inactiveDays',
-              color: const Color(0xFF8B949E),
-            ),
-
-            const SizedBox(height: AppTheme.spacing12),
-
-            _buildBreakdownRow(
-              icon: Icons.stars_outlined,
-              label: 'Max in a Day',
-              value: '$maxDaily',
-              color: const Color(0xFFA371F7),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBreakdownRow({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(AppTheme.spacing8),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-          ),
-          child: Icon(icon, color: color, size: 20),
-        ),
-
-        const SizedBox(width: AppTheme.spacing12),
-
-        Expanded(child: Text(label, style: context.textTheme.bodyLarge)),
-
-        Text(
-          value,
-          style: context.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildWeeklyActivity() {
+  Widget _buildWeeklyChart() {
     final today = DateTime.now();
+
+    // Generate data for last 7 days
     final weekDays = List.generate(7, (index) {
       final date = today.subtract(Duration(days: 6 - index));
-      final dayName = AppDateUtils.getDayName(date);
-      final contributions = _cachedData!.dailyContributions[date.day] ?? 0;
-      return {'day': dayName, 'count': contributions, 'date': date};
+      final dayName = AppDateUtils.getDayName(date).substring(0, 1);
+      final count = _cachedData!.dailyContributions[date.day] ?? 0;
+      return {'day': dayName, 'count': count, 'isToday': index == 6};
     });
 
     final maxCount = weekDays
-        .map((d) => d['count'] as int)
-        .reduce((max, count) => count > max ? count : max);
+        .map((e) => e['count'] as int)
+        .reduce((a, b) => a > b ? a : b);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppTheme.spacing20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Last 7 Days',
-              style: context.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Last 7 Days',
+          style: context.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: AppTheme.spacing12),
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(AppTheme.spacing16),
+          decoration: BoxDecoration(
+            color: context.theme.cardColor,
+            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+            border: Border.all(color: context.borderColor),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                height: 100,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: weekDays.map((data) {
+                    final count = data['count'] as int;
+                    final isToday = data['isToday'] as bool;
+                    final heightPct = maxCount > 0 ? (count / maxCount) : 0.0;
 
-            const SizedBox(height: AppTheme.spacing20),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: weekDays.map((day) {
-                final count = day['count'] as int;
-                final height = (maxCount > 0 ? (count / maxCount) * 100 : 10.0);
-                final isToday = (day['date'] as DateTime).day == today.day;
-
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppTheme.spacing4,
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          '$count',
-                          style: context.textTheme.labelSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: count > 0
-                                ? const Color(0xFF26A641)
-                                : context.colorScheme.onBackground.withOpacity(
-                                    0.4,
-                                  ),
-                          ),
+                    return Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AppTheme.spacing4,
                         ),
-                        const SizedBox(height: AppTheme.spacing8),
-                        Container(
-                          height: height.clamp(10.0, 100.0),
-                          decoration: BoxDecoration(
-                            color: count > 0
-                                ? const Color(0xFF26A641)
-                                : context.colorScheme.onBackground.withOpacity(
-                                    0.1,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (count > 0) ...[
+                              Text(
+                                '$count',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: isToday
+                                      ? AppTheme.brandGreen
+                                      : context.theme.hintColor,
+                                ),
+                              ),
+                              SizedBox(height: AppTheme.spacing4),
+                            ],
+
+                            // Animated Bar
+                            TweenAnimationBuilder<double>(
+                              tween: Tween(begin: 0, end: heightPct),
+                              duration: const Duration(milliseconds: 800),
+                              curve: Curves.easeOutQuart,
+                              builder: (context, value, _) {
+                                return Container(
+                                  width: double.infinity,
+                                  constraints: const BoxConstraints(
+                                    minHeight: 4,
+                                    maxHeight: 60,
                                   ),
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(AppTheme.spacing4),
+                                  height: 4 + (56 * value),
+                                  decoration: BoxDecoration(
+                                    color: count > 0
+                                        ? (isToday
+                                              ? AppTheme.brandGreen
+                                              : AppTheme.brandGreen.withOpacity(
+                                                  0.5,
+                                                ))
+                                        : context.theme.hintColor.withOpacity(
+                                            0.1,
+                                          ),
+                                    borderRadius: BorderRadius.circular(
+                                      AppTheme.radiusSmall,
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
-                          ),
+                          ],
                         ),
-                        const SizedBox(height: AppTheme.spacing8),
-                        Text(
-                          (day['day'] as String).substring(0, 1),
-                          style: context.textTheme.labelSmall?.copyWith(
-                            fontWeight: isToday
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                            color: isToday
-                                ? context.primaryColor
-                                : context.colorScheme.onBackground.withOpacity(
-                                    0.6,
-                                  ),
-                          ),
-                        ),
-                      ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              SizedBox(height: AppTheme.spacing8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: weekDays.map((data) {
+                  final isToday = data['isToday'] as bool;
+                  return Expanded(
+                    child: Text(
+                      data['day'] as String,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isToday
+                            ? context.textTheme.bodyLarge?.color
+                            : context.theme.hintColor,
+                        fontWeight: isToday
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
                     ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // 📈 STATS GRID
+  // ════════════════════════════════════════════════════════════════════════
+
+  Widget _buildMainStatsGrid() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spacing = AppTheme.spacing12;
+        final cardWidth = (constraints.maxWidth - spacing) / 2;
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                SizedBox(
+                  width: cardWidth,
+                  child: _buildStatBox(
+                    label: 'Total Commits',
+                    value: '${_cachedData!.totalContributions}',
+                    icon: Icons.functions,
+                    color: AppTheme.brandBlue,
                   ),
-                );
-              }).toList(),
+                ),
+                SizedBox(width: spacing),
+                SizedBox(
+                  width: cardWidth,
+                  child: _buildStatBox(
+                    label: 'Today',
+                    value: '${_cachedData!.todayCommits}',
+                    icon: Icons.today,
+                    color: AppTheme.brandGreen,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: spacing),
+            Row(
+              children: [
+                SizedBox(
+                  width: cardWidth,
+                  child: _buildStatBox(
+                    label: 'Max Streak',
+                    value: '${_cachedData!.longestStreak}',
+                    icon: Icons.history,
+                    color: AppTheme.brandPurple,
+                  ),
+                ),
+                SizedBox(width: spacing),
+                SizedBox(
+                  width: cardWidth,
+                  child: _buildStatBox(
+                    label: 'Average/Day',
+                    value: _calculateAverage(),
+                    icon: Icons.analytics_outlined,
+                    color: AppTheme.brandBlue,
+                  ),
+                ),
+              ],
             ),
           ],
-        ),
+        );
+      },
+    );
+  }
+
+  String _calculateAverage() {
+    final dayOfMonth = DateTime.now().day;
+    if (dayOfMonth == 0) return '0.0';
+    return (_cachedData!.totalContributions / dayOfMonth).toStringAsFixed(1);
+  }
+
+  Widget _buildStatBox({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Container(
+      padding: EdgeInsets.all(AppTheme.spacing16),
+      decoration: BoxDecoration(
+        color: context.theme.cardColor,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+        border: Border.all(color: context.borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 20, color: color),
+          SizedBox(height: AppTheme.spacing12),
+          Text(
+            value,
+            style: context.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: context.textTheme.bodyLarge?.color,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          SizedBox(height: AppTheme.spacing4),
+          Text(
+            label,
+            style: context.textTheme.bodySmall?.copyWith(
+              color: context.theme.hintColor,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
 
+  // ════════════════════════════════════════════════════════════════════════
+  // 🏆 BEST DAY CARD
+  // ════════════════════════════════════════════════════════════════════════
+
   Widget _buildBestDayCard() {
     final entries = _cachedData!.dailyContributions.entries.toList();
-
-    // ✅ FIXED: Check if entries is empty before accessing
-    if (entries.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    if (entries.isEmpty) return const SizedBox.shrink();
 
     entries.sort((a, b) => b.value.compareTo(a.value));
     final bestDay = entries.first;
+
+    if (bestDay.key > 31) return const SizedBox.shrink();
+
     final date = DateTime(
       DateTime.now().year,
       DateTime.now().month,
       bestDay.key,
     );
-    final dayName = AppDateUtils.getDayName(date);
 
-    return Card(
-      child: Container(
-        padding: const EdgeInsets.all(AppTheme.spacing20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              const Color(0xFFFFD700).withOpacity(0.1),
-              const Color(0xFFFF9500).withOpacity(0.05),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Personal Record',
+          style: context.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
           ),
-          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
         ),
-        child: Row(
+        SizedBox(height: AppTheme.spacing12),
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(AppTheme.spacing20),
+          decoration: BoxDecoration(
+            color: context.theme.cardColor,
+            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+            border: Border.all(color: AppTheme.brandYellow.withOpacity(0.5)),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.brandYellow.withOpacity(0.1),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${bestDay.value} Commits',
+                      style: context.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.brandYellow,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: AppTheme.spacing4),
+                    Text(
+                      '${AppDateUtils.getDayName(date)}, ${AppDateUtils.getCurrentMonthName()} ${bestDay.key}',
+                      style: context.textTheme.bodyMedium?.copyWith(
+                        color: context.theme.hintColor,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: AppTheme.spacing12),
+              Icon(
+                Icons.emoji_events_rounded,
+                color: AppTheme.brandYellow,
+                size: 40,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // 📭 EMPTY STATE
+  // ════════════════════════════════════════════════════════════════════════
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(AppTheme.spacing20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(AppTheme.spacing16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFD700).withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.emoji_events,
-                color: Color(0xFFFFD700),
-                size: 32,
-              ),
+            Icon(
+              Icons.bar_chart_rounded,
+              size: 64,
+              color: context.theme.hintColor.withOpacity(0.3),
             ),
-
-            const SizedBox(width: AppTheme.spacing16),
-
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Best Day',
-                    style: context.textTheme.bodyMedium?.copyWith(
-                      color: context.colorScheme.onBackground.withOpacity(0.6),
-                    ),
-                  ),
-                  const SizedBox(height: AppTheme.spacing4),
-                  Text(
-                    '$dayName, ${AppDateUtils.getCurrentMonthName()} ${bestDay.key}',
-                    style: context.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
+            SizedBox(height: AppTheme.spacing16),
+            Text('No stats available', style: context.textTheme.titleMedium),
+            SizedBox(height: AppTheme.spacing8),
             Text(
-              '${bestDay.value}',
-              style: context.textTheme.displaySmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFFFFD700),
+              'Sync your data from the Dashboard',
+              style: context.textTheme.bodyMedium?.copyWith(
+                color: context.theme.hintColor,
               ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),

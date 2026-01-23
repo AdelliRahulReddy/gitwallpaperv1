@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:workmanager/workmanager.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../core/theme.dart';
 import '../core/preferences.dart';
-import '../core/constants.dart';
 import '../core/github_api.dart';
 import '../core/wallpaper_service.dart';
 import '../models/contribution_data.dart';
-import '../widgets/heatmap_painter.dart';
+
+// ══════════════════════════════════════════════════════════════════════════
+// 🏠 HOME SCREEN - MISSION CONTROL DASHBOARD
+// ══════════════════════════════════════════════════════════════════════════
+// No preview - Focus on insights, actions, and motivation
+// ══════════════════════════════════════════════════════════════════════════
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -23,7 +28,6 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadData();
-    // ✅ IMPROVED: Auto-refresh on app open (smarter threshold)
     _autoRefreshOnOpen();
   }
 
@@ -32,135 +36,81 @@ class _HomeScreenState extends State<HomeScreen> {
       try {
         _cachedData = AppPreferences.getCachedData();
       } catch (e) {
-        debugPrint('HomeScreen: Error loading cached data: $e');
         _cachedData = null;
       }
     });
   }
 
-  /// ✅ IMPROVED: Auto refresh when app opens (smart threshold)
-  /// Only refreshes if:
-  /// - No cached data exists, OR
-  /// - Last update was more than 6 hours ago (not too aggressive)
   Future<void> _autoRefreshOnOpen() async {
     try {
       final lastUpdate = AppPreferences.getLastUpdate();
       final now = DateTime.now();
 
-      // ✅ IMPROVED: 6-hour threshold instead of 1-hour (less aggressive)
       if (_cachedData == null ||
           lastUpdate == null ||
           now.difference(lastUpdate).inHours >= 6) {
-        debugPrint(
-          'HomeScreen: Auto-refreshing data (last update: $lastUpdate)',
-        );
         await _refreshData(showSnackbar: false);
-      } else {
-        debugPrint(
-          'HomeScreen: Using cached data (${now.difference(lastUpdate).inHours}h old)',
-        );
       }
     } catch (e) {
-      debugPrint('HomeScreen: Auto-refresh failed: $e');
+      debugPrint('Auto-refresh failed: $e');
     }
   }
 
   Future<void> _refreshData({bool showSnackbar = true}) async {
     if (_isRefreshing) return;
 
+    HapticFeedback.mediumImpact();
     setState(() => _isRefreshing = true);
 
     try {
       final username = AppPreferences.getUsername();
-      final token = AppPreferences.getToken();
+      final token = await AppPreferences.getToken();
 
-      if (username == null || username.isEmpty) {
-        throw Exception('GitHub username not configured');
+      if (username == null || token == null) {
+        throw Exception('Credentials missing');
       }
 
-      if (token == null || token.isEmpty) {
-        throw Exception('GitHub token not configured');
-      }
-
-      debugPrint('HomeScreen: Fetching contributions for $username');
       final api = GitHubAPI(token: token);
       final data = await api.fetchContributions(username);
 
-      // Save to cache
       await AppPreferences.setCachedData(data);
       await AppPreferences.setLastUpdate(DateTime.now());
 
-      debugPrint('HomeScreen: Data synced successfully');
-
-      // ✅ FIXED: Regenerate and set wallpaper automatically
       final target = AppPreferences.getWallpaperTarget();
-      final wallpaperSuccess = await WallpaperService.refreshAndSetWallpaper(
-        target: target,
-      );
+      await WallpaperService.refreshAndSetWallpaper(target: target);
 
       _loadData();
 
       if (mounted && showSnackbar) {
+        HapticFeedback.heavyImpact();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              wallpaperSuccess
-                  ? '✅ Data synced & wallpaper updated!'
-                  : '✅ Data synced (wallpaper update skipped)',
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: AppTheme.spacing12),
+                const Text('Synced & wallpaper updated!'),
+              ],
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: AppTheme.success,
             behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 2),
           ),
         );
       }
     } catch (e) {
-      debugPrint('HomeScreen: Refresh error: $e');
-
       if (mounted && showSnackbar) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ ${e.toString().replaceAll('Exception: ', '')}'),
-            backgroundColor: Colors.red,
+            content: Text(
+              'Failed: ${e.toString().replaceAll('Exception: ', '')}',
+            ),
+            backgroundColor: AppTheme.error,
             behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 3),
           ),
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isRefreshing = false);
-      }
-    }
-  }
-
-  /// 🧪 TEST: Trigger immediate background update (for testing only)
-  Future<void> _testBackgroundUpdate() async {
-    try {
-      // Register one-time task with 5-second delay
-      await Workmanager().registerOneOffTask(
-        'test-bg-${DateTime.now().millisecondsSinceEpoch}',
-        AppConstants.wallpaperTaskTag,
-        initialDelay: const Duration(seconds: 5),
-        constraints: Constraints(networkType: NetworkType.connected),
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              '🧪 Background update scheduled in 5 seconds!\n\nCLOSE THE APP NOW to test!',
-            ),
-            duration: Duration(seconds: 4),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-
-      debugPrint('🧪 Test background task registered');
-    } catch (e) {
-      debugPrint('🧪 Test background task failed: $e');
+      if (mounted) setState(() => _isRefreshing = false);
     }
   }
 
@@ -168,301 +118,576 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.backgroundColor,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header
-            _buildHeader(),
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          // Hero Header with Greeting
+          _buildHeroHeader(),
 
-            // 70% Live Preview
-            Expanded(
-              flex: 7,
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: context.screenPadding.left,
-                ),
-                child: _buildLivePreview(),
-              ),
+          // Motivation Card
+          if (_cachedData != null) ...[
+            SliverPadding(
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.spacing20),
+              sliver: SliverToBoxAdapter(child: _buildMotivationHero()),
             ),
 
-            // 30% Quick Info
-            Expanded(
-              flex: 3,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: context.surfaceColor,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(AppTheme.radiusRound),
-                    topRight: Radius.circular(AppTheme.radiusRound),
-                  ),
-                ),
-                child: _buildQuickInfo(),
-              ),
+            SliverToBoxAdapter(child: SizedBox(height: AppTheme.spacing24)),
+
+            // Today's Focus
+            SliverPadding(
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.spacing20),
+              sliver: SliverToBoxAdapter(child: _buildTodayFocus()),
+            ),
+
+            SliverToBoxAdapter(child: SizedBox(height: AppTheme.spacing24)),
+
+            // Quick Actions
+            SliverPadding(
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.spacing20),
+              sliver: SliverToBoxAdapter(child: _buildQuickActions()),
+            ),
+
+            SliverToBoxAdapter(child: SizedBox(height: AppTheme.spacing24)),
+
+            // Achievements
+            SliverPadding(
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.spacing20),
+              sliver: SliverToBoxAdapter(child: _buildAchievements()),
             ),
           ],
-        ),
-      ),
-      // 🧪 TEST BUTTON: Remove after testing
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _testBackgroundUpdate,
-        icon: const Icon(Icons.science),
-        label: const Text('Test BG'),
-        backgroundColor: Colors.orange,
-        tooltip: 'Test background update (5 sec delay)',
-      ),
-    );
-  }
 
-  Widget _buildHeader() {
-    return Padding(
-      padding: EdgeInsets.all(context.screenPadding.left),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'GitHub Wallpaper',
-                  style: context.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                if (_cachedData != null)
-                  Text(
-                    '@${_cachedData!.username}',
-                    style: context.textTheme.bodyMedium?.copyWith(
-                      color: context.colorScheme.onBackground.withOpacity(0.6),
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: AppTheme.spacing8),
-          IconButton(
-            onPressed: _isRefreshing ? null : () => _refreshData(),
-            icon: _isRefreshing
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh_outlined),
-            style: IconButton.styleFrom(
-              backgroundColor: context.primaryColor.withOpacity(0.1),
-              foregroundColor: context.primaryColor,
-            ),
-          ),
+          // Empty State
+          if (_cachedData == null)
+            SliverFillRemaining(child: _buildEmptyState()),
+
+          // Bottom padding
+          SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       ),
     );
   }
 
-  Widget _buildLivePreview() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          'Live Preview',
-          style: context.textTheme.titleMedium?.copyWith(
-            color: context.colorScheme.onBackground.withOpacity(0.6),
-          ),
-        ),
-        const SizedBox(height: AppTheme.spacing12),
+  // ════════════════════════════════════════════════════════════════════════
+  // 👋 HERO HEADER
+  // ════════════════════════════════════════════════════════════════════════
 
-        // Phone Mockup with Wallpaper
-        Flexible(
-          child: AspectRatio(
-            aspectRatio: 9 / 19.5,
-            child: Container(
-              decoration: BoxDecoration(
-                color: context.backgroundColor,
-                borderRadius: BorderRadius.circular(AppTheme.spacing32),
-                border: Border.all(
-                  color: context.colorScheme.onBackground.withOpacity(0.1),
-                  width: 8,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppTheme.spacing24),
-                child: _cachedData == null
-                    ? _buildLoadingState()
-                    : CustomPaint(
-                        painter: HeatmapPainter(
-                          data: _cachedData!,
-                          isDarkMode:
-                              context.theme.brightness == Brightness.dark,
-                          verticalPosition:
-                              AppPreferences.getVerticalPosition(),
-                          horizontalPosition:
-                              AppPreferences.getHorizontalPosition(),
-                          scale: AppPreferences.getScale(),
-                          opacity: AppPreferences.getOpacity(),
-                          customQuote: AppPreferences.getCustomQuote(),
-                          paddingTop: AppPreferences.getPaddingTop(),
-                          paddingBottom: AppPreferences.getPaddingBottom(),
-                          paddingLeft: AppPreferences.getPaddingLeft(),
-                          paddingRight: AppPreferences.getPaddingRight(),
-                          cornerRadius: AppPreferences.getCornerRadius(),
-                          quoteFontSize: AppPreferences.getQuoteFontSize(),
-                          quoteOpacity: AppPreferences.getQuoteOpacity(),
+  Widget _buildHeroHeader() {
+    return SliverToBoxAdapter(
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: EdgeInsets.all(AppTheme.spacing20),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _getGreeting(),
+                      style: context.textTheme.headlineLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        height: 1.1,
+                      ),
+                    ),
+                    SizedBox(height: AppTheme.spacing4),
+                    if (_cachedData != null)
+                      Text(
+                        '@${_cachedData!.username}',
+                        style: context.textTheme.titleMedium?.copyWith(
+                          color: context.primaryColor,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
+                  ],
+                ),
               ),
-            ),
+              // Sync Button
+              Container(
+                decoration: BoxDecoration(
+                  color: context.primaryColor,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                  boxShadow: [
+                    BoxShadow(
+                      color: context.primaryColor.withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  onPressed: _isRefreshing ? null : () => _refreshData(),
+                  icon: _isRefreshing
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.refresh, color: Colors.white),
+                  tooltip: 'Sync Now',
+                ),
+              ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good\nMorning';
+    if (hour < 17) return 'Good\nAfternoon';
+    return 'Good\nEvening';
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // 🔥 MOTIVATION HERO
+  // ════════════════════════════════════════════════════════════════════════
+
+  Widget _buildMotivationHero() {
+    final streak = _cachedData!.currentStreak;
+
+    return Container(
+      padding: EdgeInsets.all(AppTheme.spacing24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppTheme.brandYellow.withOpacity(0.2),
+            AppTheme.brandYellow.withOpacity(0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(AppTheme.radiusXL),
+        border: Border.all(
+          color: AppTheme.brandYellow.withOpacity(0.3),
+          width: 2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(AppTheme.spacing16),
+                decoration: BoxDecoration(
+                  color: AppTheme.brandYellow.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.local_fire_department,
+                  color: AppTheme.brandYellow,
+                  size: 32,
+                ),
+              ),
+              SizedBox(width: AppTheme.spacing16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '$streak Day Streak',
+                      style: context.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.brandYellow,
+                      ),
+                    ),
+                    SizedBox(height: AppTheme.spacing4),
+                    Text(
+                      _getMotivation(streak),
+                      style: context.textTheme.bodyLarge?.copyWith(
+                        color: context.textTheme.bodyLarge?.color,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.2, end: 0);
+  }
+
+  String _getMotivation(int streak) {
+    if (streak == 0) return "Start your journey today! 🚀";
+    if (streak < 3) return "Building momentum... 💪";
+    if (streak < 7) return "You're on fire! Keep going! 🔥";
+    if (streak < 14) return "Unstoppable! 🌟";
+    if (streak < 30) return "Legendary commitment! 👑";
+    return "Hall of Fame! 🏆";
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // 🎯 TODAY'S FOCUS
+  // ════════════════════════════════════════════════════════════════════════
+
+  Widget _buildTodayFocus() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Today',
+          style: context.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: AppTheme.spacing12),
+        Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: _buildFocusCard(
+                icon: Icons.commit_rounded,
+                value: '${_cachedData!.todayCommits}',
+                label: 'Commits',
+                color: AppTheme.brandGreen,
+                isLarge: true,
+              ).animate().fadeIn(delay: 100.ms).slideX(begin: -0.2, end: 0),
+            ),
+            SizedBox(width: AppTheme.spacing12),
+            Expanded(
+              child: _buildFocusCard(
+                icon: Icons.calendar_today,
+                value: '${DateTime.now().day}',
+                label: _getMonthShort(),
+                color: AppTheme.brandBlue,
+              ).animate().fadeIn(delay: 200.ms).slideX(begin: -0.2, end: 0),
+            ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _buildLoadingState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (_isRefreshing) ...[
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text(
-              'Syncing...',
-              style: TextStyle(
-                color: context.colorScheme.onBackground.withOpacity(0.6),
-                fontSize: 14,
-              ),
-            ),
-          ] else ...[
-            Icon(
-              Icons.cloud_download_outlined,
-              size: 48,
-              color: context.colorScheme.onBackground.withOpacity(0.3),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Tap refresh to sync',
-              style: TextStyle(
-                color: context.colorScheme.onBackground.withOpacity(0.6),
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickInfo() {
-    final lastUpdate = AppPreferences.getLastUpdate();
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppTheme.spacing16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (_cachedData != null) ...[
-            // Quick Stats Row
-            Row(
-              children: [
-                Expanded(
-                  child: _buildQuickStatCard(
-                    icon: Icons.calendar_month_outlined,
-                    value: '${_cachedData!.totalContributions}',
-                    label: 'This Month',
-                    color: const Color(0xFF39D353),
-                  ),
-                ),
-                const SizedBox(width: AppTheme.spacing12),
-                Expanded(
-                  child: _buildQuickStatCard(
-                    icon: Icons.local_fire_department_outlined,
-                    value: '${_cachedData!.currentStreak}d',
-                    label: 'Streak',
-                    color: const Color(0xFFFF9500),
-                  ),
-                ),
-                const SizedBox(width: AppTheme.spacing12),
-                Expanded(
-                  child: _buildQuickStatCard(
-                    icon: Icons.commit_outlined,
-                    value: '${_cachedData!.todayCommits}',
-                    label: 'Today',
-                    color: const Color(0xFF58A6FF),
-                  ),
-                ),
-              ],
-            ),
-          ],
-
-          if (lastUpdate != null) ...[
-            const SizedBox(height: AppTheme.spacing16),
-
-            // ✅ FIXED: Last Update & Auto-update status (corrected text)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(AppTheme.spacing12),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.autorenew, color: Colors.green, size: 16),
-                  const SizedBox(width: AppTheme.spacing8),
-                  Text(
-                    'Auto-updates every 15 min (testing)',
-                    style: context.textTheme.bodySmall?.copyWith(
-                      color: Colors.green,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickStatCard({
+  Widget _buildFocusCard({
     required IconData icon,
     required String value,
     required String label,
     required Color color,
+    bool isLarge = false,
   }) {
     return Container(
-      padding: const EdgeInsets.all(AppTheme.spacing12),
+      padding: EdgeInsets.all(AppTheme.spacing20),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+        color: context.theme.cardColor,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+        border: Border.all(color: context.borderColor, width: 2),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: AppTheme.spacing4),
+          Icon(icon, color: color, size: isLarge ? 32 : 24),
+          SizedBox(height: AppTheme.spacing12),
           Text(
             value,
-            style: context.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
+            style:
+                (isLarge
+                        ? context.textTheme.displaySmall
+                        : context.textTheme.headlineMedium)
+                    ?.copyWith(fontWeight: FontWeight.bold),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           Text(
             label,
-            style: context.textTheme.bodySmall,
-            textAlign: TextAlign.center,
+            style: context.textTheme.bodyMedium?.copyWith(
+              color: context.theme.hintColor,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  String _getMonthShort() {
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return months[DateTime.now().month - 1];
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // ⚡ QUICK ACTIONS - FIXED
+  // ════════════════════════════════════════════════════════════════════════
+
+  Widget _buildQuickActions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Quick Actions',
+          style: context.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: AppTheme.spacing12),
+        Row(
+          children: [
+            // Apply Wallpaper
+            Expanded(
+              child: _buildActionCard(
+                icon: Icons.wallpaper,
+                title: 'Apply Now',
+                subtitle: 'Update wallpaper',
+                color: AppTheme.brandPurple,
+                onTap: () async {
+                  HapticFeedback.mediumImpact();
+                  try {
+                    final target = AppPreferences.getWallpaperTarget();
+                    await WallpaperService.refreshAndSetWallpaper(
+                      target: target,
+                    );
+                    if (mounted) {
+                      HapticFeedback.heavyImpact();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Row(
+                            children: [
+                              const Icon(
+                                Icons.check_circle,
+                                color: Colors.white,
+                              ),
+                              SizedBox(width: AppTheme.spacing12),
+                              const Text('Wallpaper applied!'),
+                            ],
+                          ),
+                          backgroundColor: AppTheme.success,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed: $e'),
+                          backgroundColor: AppTheme.error,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  }
+                },
+              ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.2, end: 0),
+            ),
+
+            SizedBox(width: AppTheme.spacing12),
+
+            // Refresh Data
+            Expanded(
+              child: _buildActionCard(
+                icon: Icons.refresh,
+                title: 'Refresh',
+                subtitle: 'Sync data now',
+                color: AppTheme.brandBlue,
+                onTap: () {
+                  _refreshData();
+                },
+              ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.2, end: 0),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+      child: Container(
+        padding: EdgeInsets.all(AppTheme.spacing20),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+          border: Border.all(color: color.withOpacity(0.3), width: 2),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: EdgeInsets.all(AppTheme.spacing12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            SizedBox(height: AppTheme.spacing12),
+            Text(
+              title,
+              style: context.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            Text(
+              subtitle,
+              style: context.textTheme.bodySmall?.copyWith(
+                color: context.theme.hintColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // 🏆 ACHIEVEMENTS
+  // ════════════════════════════════════════════════════════════════════════
+
+  Widget _buildAchievements() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Milestones',
+          style: context.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: AppTheme.spacing12),
+        _buildAchievementItem(
+          icon: Icons.emoji_events,
+          title: 'Total Contributions',
+          value: '${_cachedData!.totalContributions}',
+          color: AppTheme.brandYellow,
+        ).animate().fadeIn(delay: 500.ms).slideX(begin: 0.2, end: 0),
+        SizedBox(height: AppTheme.spacing12),
+        _buildAchievementItem(
+          icon: Icons.trending_up,
+          title: 'Longest Streak',
+          value: '${_cachedData!.longestStreak} days',
+          color: AppTheme.brandGreen,
+        ).animate().fadeIn(delay: 600.ms).slideX(begin: 0.2, end: 0),
+      ],
+    );
+  }
+
+  Widget _buildAchievementItem({
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: EdgeInsets.all(AppTheme.spacing16),
+      decoration: BoxDecoration(
+        color: context.theme.cardColor,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+        border: Border.all(color: context.borderColor),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(AppTheme.spacing12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          SizedBox(width: AppTheme.spacing16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: context.textTheme.bodyMedium?.copyWith(
+                    color: context.theme.hintColor,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: context.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            Icons.arrow_forward_ios,
+            size: 16,
+            color: context.theme.hintColor,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // 📭 EMPTY STATE
+  // ════════════════════════════════════════════════════════════════════════
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(AppTheme.spacing20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.cloud_sync_outlined,
+              size: 80,
+              color: context.theme.hintColor.withOpacity(0.3),
+            ),
+            SizedBox(height: AppTheme.spacing24),
+            Text(
+              'Ready to Sync',
+              style: context.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: AppTheme.spacing8),
+            Text(
+              'Tap the sync button to fetch your\nGitHub contributions',
+              style: context.textTheme.bodyMedium?.copyWith(
+                color: context.theme.hintColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -9,21 +9,33 @@ import '../models/contribution_data.dart';
 import '../widgets/heatmap_painter.dart';
 import 'constants.dart';
 import 'preferences.dart';
+
 import 'github_api.dart';
 
+// ══════════════════════════════════════════════════════════════════════════
+// 🖼️ WALLPAPER SERVICE - CLEAN & ROBUST
+// ══════════════════════════════════════════════════════════════════════════
+// Handles wallpaper generation and setting with safety checks
+// ══════════════════════════════════════════════════════════════════════════
+
 class WallpaperService {
-  // 🔒 Prevent parallel execution
+  // Prevent parallel execution
   static bool _isRunning = false;
 
-  // ⏱️ Safety timeouts
+  // Timeouts
   static const Duration _networkTimeout = Duration(seconds: 30);
-  static const Duration _imageGenerationTimeout = Duration(seconds: 15);
+  static const Duration _imageTimeout = Duration(seconds: 15);
+  static const Duration _setWallpaperTimeout = Duration(seconds: 10);
+
+  // Limits
   static const int _maxFileSizeBytes = 10 * 1024 * 1024; // 10MB
 
-  /// 🎯 PUBLIC API - Refresh wallpaper (once per day max)
-  /// Returns: true if successful, false if failed or already updated today
+  // ════════════════════════════════════════════════════════════════════════
+  // 🎯 PUBLIC API
+  // ════════════════════════════════════════════════════════════════════════
+
+  /// Refresh and set wallpaper (returns true if successful)
   static Future<bool> refreshAndSetWallpaper({String target = 'both'}) async {
-    // Prevent parallel execution
     if (_isRunning) {
       debugPrint('WallpaperService: Already running, skipping');
       return false;
@@ -32,12 +44,11 @@ class WallpaperService {
     _isRunning = true;
 
     try {
-      // Note: Guards removed for better user control and manual updates
       final now = DateTime.now();
 
-      // 🔑 Validate credentials
+      // 1. Validate credentials
       final username = AppPreferences.getUsername();
-      final token = AppPreferences.getToken();
+      final token = await AppPreferences.getToken();
 
       if (username == null || username.isEmpty) {
         throw WallpaperException('GitHub username not configured');
@@ -47,126 +58,91 @@ class WallpaperService {
         throw WallpaperException('GitHub token not configured');
       }
 
-      debugPrint('WallpaperService: Starting wallpaper update for $username');
+      debugPrint('WallpaperService: Starting for $username');
 
-      // 🌐 Fetch GitHub data (with timeout)
+      // 2. Fetch data
       final api = GitHubAPI(token: token);
       final data = await api
           .fetchContributions(username)
           .timeout(
             _networkTimeout,
-            onTimeout: () =>
-                throw TimeoutException('GitHub API request timed out'),
+            onTimeout: () => throw TimeoutException('GitHub API timeout'),
           );
 
       if (data.days.isEmpty) {
-        throw WallpaperException('No contribution data received from GitHub');
+        throw WallpaperException('No contribution data found');
       }
 
-      debugPrint(
-        'WallpaperService: Fetched ${data.days.length} contribution days',
-      );
+      debugPrint('WallpaperService: Fetched ${data.days.length} days');
 
-      // 🎨 Generate wallpaper image (with timeout)
+      // 3. Generate image
       final file = await _generateWallpaper(data).timeout(
-        _imageGenerationTimeout,
-        onTimeout: () => throw TimeoutException('Image generation timed out'),
+        _imageTimeout,
+        onTimeout: () => throw TimeoutException('Image generation timeout'),
       );
 
-      // ✅ Validate generated file
-      if (!await file.exists()) {
-        throw WallpaperException('Generated wallpaper file does not exist');
-      }
+      // 4. Validate file
+      _validateFile(file);
 
       final fileSize = await file.length();
-      if (fileSize == 0) {
-        throw WallpaperException('Generated wallpaper file is empty');
-      }
-
-      if (fileSize > _maxFileSizeBytes) {
-        throw WallpaperException(
-          'Generated wallpaper file too large: ${fileSize ~/ 1024 ~/ 1024}MB',
-        );
-      }
-
       debugPrint(
-        'WallpaperService: Generated wallpaper (${fileSize ~/ 1024}KB)',
+        'WallpaperService: Image ready (${(fileSize / 1024).round()}KB)',
       );
 
-      // 🖼️ Set wallpaper using wallpaper_manager_plus
-      final locationCode = _convertTargetToLocation(target);
-
+      // 5. Set wallpaper
+      final location = _getLocationCode(target);
       await WallpaperManagerPlus()
-          .setWallpaper(file, locationCode)
+          .setWallpaper(file, location)
           .timeout(
-            const Duration(seconds: 10),
+            _setWallpaperTimeout,
             onTimeout: () =>
-                throw TimeoutException('Wallpaper setting timed out'),
+                throw TimeoutException('Wallpaper setting timeout'),
           );
 
-      debugPrint('WallpaperService: Wallpaper set successfully ($target)');
+      debugPrint('WallpaperService: Success!');
 
-      // ✅ Save state ONLY after confirmed success
+      // 6. Save state
       await AppPreferences.setCachedData(data);
       await AppPreferences.setLastUpdate(now);
 
       return true;
     } on TimeoutException catch (e) {
-      debugPrint('WallpaperService timeout: $e');
+      debugPrint('WallpaperService: Timeout - $e');
       return false;
     } on SocketException catch (e) {
-      debugPrint('WallpaperService network error: $e');
+      debugPrint('WallpaperService: Network error - $e');
       return false;
     } on WallpaperException catch (e) {
-      debugPrint('WallpaperService error: ${e.message}');
+      debugPrint('WallpaperService: Error - ${e.message}');
       return false;
-    } catch (e, stackTrace) {
-      debugPrint('WallpaperService unexpected error: $e');
-      debugPrint('Stack trace: $stackTrace');
+    } catch (e, stack) {
+      debugPrint('WallpaperService: Crash - $e\n$stack');
       return false;
     } finally {
       _isRunning = false;
     }
   }
 
-  /// Convert target string to wallpaper_manager_plus location code
-  static int _convertTargetToLocation(String target) {
-    switch (target.toLowerCase()) {
-      case 'lock':
-        return WallpaperManagerPlus.lockScreen;
-      case 'home':
-        return WallpaperManagerPlus.homeScreen;
-      case 'both':
-        return WallpaperManagerPlus.bothScreens;
-      default:
-        return WallpaperManagerPlus.homeScreen;
-    }
-  }
+  // ════════════════════════════════════════════════════════════════════════
+  // 🔧 PRIVATE HELPERS
+  // ════════════════════════════════════════════════════════════════════════
 
-  /// 🎨 Generates wallpaper PNG file from contribution data
+  /// Generate wallpaper PNG file
   static Future<File> _generateWallpaper(CachedContributionData data) async {
     final isDarkMode = AppPreferences.getDarkMode();
+    final width = AppConstants.wallpaperWidth.toDouble();
+    final height = AppConstants.wallpaperHeight.toDouble();
+    final size = Size(width, height);
 
-    // Use default dimensions (wallpaper_manager_plus doesn't provide dimension query)
-    int targetWidth = AppConstants.wallpaperWidth;
-    int targetHeight = AppConstants.wallpaperHeight;
-
-    debugPrint(
-      'WallpaperService: Using dimensions ${targetWidth}x$targetHeight',
-    );
-
-    final size = Size(targetWidth.toDouble(), targetHeight.toDouble());
-
-    // Create canvas
+    // Setup canvas
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
 
-    // Background
+    // Draw background
     final bgPaint = Paint()
       ..color = isDarkMode
-          ? AppConstants.darkBackground
-          : AppConstants.lightBackground;
-
+          ? AppConstants.heatmapDarkBg
+          : AppConstants.heatmapLightBg;
     canvas.drawRect(Offset.zero & size, bgPaint);
 
     // Draw heatmap
@@ -189,25 +165,30 @@ class WallpaperService {
 
     painter.paint(canvas, size);
 
-    // Render to image
-    final image = await recorder.endRecording().toImage(
-      size.width.toInt(),
-      size.height.toInt(),
-    );
-
+    // Export to PNG
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(width.toInt(), height.toInt());
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
 
     if (byteData == null) {
-      throw WallpaperException('Failed to encode image to PNG');
+      throw WallpaperException('Failed to encode PNG');
     }
 
-    // Save to file
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/github_wallpaper.png');
+    // Save file atomically
+    return await _saveFileAtomic(
+      byteData.buffer.asUint8List(),
+      'github_wallpaper.png',
+    );
+  }
 
-    // Write atomically (temp file + rename)
+  /// Save file atomically (write to temp, then rename)
+  static Future<File> _saveFileAtomic(List<int> bytes, String filename) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final file = File('${directory.path}/$filename');
     final tempFile = File('${file.path}.tmp');
-    await tempFile.writeAsBytes(byteData.buffer.asUint8List(), flush: true);
+
+    // Write to temp
+    await tempFile.writeAsBytes(bytes, flush: true);
 
     // Atomic rename
     if (await file.exists()) {
@@ -217,13 +198,47 @@ class WallpaperService {
 
     return file;
   }
+
+  /// Validate generated file
+  static Future<void> _validateFile(File file) async {
+    if (!await file.exists()) {
+      throw WallpaperException('Generated file missing');
+    }
+
+    final fileSize = await file.length();
+
+    if (fileSize == 0) {
+      throw WallpaperException('Generated file is empty');
+    }
+
+    if (fileSize > _maxFileSizeBytes) {
+      final sizeMB = (fileSize / 1024 / 1024).toStringAsFixed(1);
+      throw WallpaperException('Wallpaper too large: ${sizeMB}MB');
+    }
+  }
+
+  /// Convert target string to location code
+  static int _getLocationCode(String target) {
+    switch (target.toLowerCase()) {
+      case 'lock':
+        return WallpaperManagerPlus.lockScreen;
+      case 'home':
+        return WallpaperManagerPlus.homeScreen;
+      case 'both':
+      default:
+        return WallpaperManagerPlus.bothScreens;
+    }
+  }
 }
 
-/// Custom exception for wallpaper-specific errors
+// ══════════════════════════════════════════════════════════════════════════
+// ⚠️ CUSTOM EXCEPTION
+// ══════════════════════════════════════════════════════════════════════════
+
 class WallpaperException implements Exception {
   final String message;
   WallpaperException(this.message);
 
   @override
-  String toString() => 'WallpaperException: $message';
+  String toString() => message;
 }

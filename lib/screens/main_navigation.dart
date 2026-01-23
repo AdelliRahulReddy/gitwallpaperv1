@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../core/theme.dart';
+import '../core/preferences.dart';
 import 'home_screen.dart';
 import 'customize_screen.dart';
 import 'stats_screen.dart';
 import 'settings_screen.dart';
+import 'setup_screen.dart';
+
+// ══════════════════════════════════════════════════════════════════════════
+// 🧭 MAIN NAVIGATION - BOTTOM NAV BAR (FIXED TO BOTTOM)
+// ══════════════════════════════════════════════════════════════════════════
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({Key? key}) : super(key: key);
@@ -15,7 +22,6 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
 
-  // ✅ Screens list - const not possible here since screens have state
   final List<Widget> _screens = const [
     HomeScreen(),
     CustomizeScreen(),
@@ -23,99 +29,140 @@ class _MainNavigationState extends State<MainNavigation> {
     SettingsScreen(),
   ];
 
-  // ✅ IMPROVED: Made nav items const
-  final List<NavigationItem> _navItems = const [
-    NavigationItem(
-      icon: Icons.home_outlined,
-      activeIcon: Icons.home,
-      label: 'Home',
-    ),
-    NavigationItem(
-      icon: Icons.palette_outlined,
-      activeIcon: Icons.palette,
-      label: 'Customize',
-    ),
-    NavigationItem(
-      icon: Icons.bar_chart_outlined,
-      activeIcon: Icons.bar_chart,
-      label: 'Stats',
-    ),
-    NavigationItem(
-      icon: Icons.settings_outlined,
-      activeIcon: Icons.settings,
-      label: 'Settings',
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _checkLoginStatus();
+  }
+
+  Future<void> _checkLoginStatus() async {
+    final hasToken = await AppPreferences.hasToken();
+    if (!hasToken && mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const SetupScreen()),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(index: _currentIndex, children: _screens),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: context.surfaceColor,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppTheme.spacing8,
-              vertical: AppTheme.spacing8,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(
-                _navItems.length,
-                (index) => _buildNavItem(index),
+      bottomNavigationBar: _buildBottomNavBar(),
+    );
+  }
+
+  Widget _buildBottomNavBar() {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.theme.cardColor,
+        border: Border(top: BorderSide(color: context.borderColor, width: 1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Container(
+          height: 70,
+          padding: EdgeInsets.symmetric(horizontal: AppTheme.spacing8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildNavItem(
+                index: 0,
+                activeIcon: Icons.home_rounded,
+                inactiveIcon: Icons.home_outlined,
+                label: 'Home',
               ),
-            ),
+              _buildNavItem(
+                index: 1,
+                activeIcon: Icons.palette_rounded,
+                inactiveIcon: Icons.palette_outlined,
+                label: 'Customize',
+              ),
+              _buildNavItem(
+                index: 2,
+                activeIcon: Icons.bar_chart_rounded,
+                inactiveIcon: Icons.bar_chart_outlined,
+                label: 'Stats',
+              ),
+              _buildNavItem(
+                index: 3,
+                activeIcon: Icons.settings_rounded,
+                inactiveIcon: Icons.settings_outlined,
+                label: 'Settings',
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildNavItem(int index) {
-    final item = _navItems[index];
+  Widget _buildNavItem({
+    required int index,
+    required IconData activeIcon,
+    required IconData inactiveIcon,
+    required String label,
+  }) {
     final isActive = _currentIndex == index;
 
     return Expanded(
-      child: InkWell(
-        onTap: () => setState(() => _currentIndex = index),
-        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-        child: AnimatedContainer(
-          duration: AppTheme.durationFast,
-          padding: const EdgeInsets.symmetric(vertical: AppTheme.spacing12),
-          decoration: BoxDecoration(
-            color: isActive
-                ? context.primaryColor.withOpacity(0.1)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-          ),
+      child: GestureDetector(
+        onTap: () {
+          if (_currentIndex != index) {
+            setState(() => _currentIndex = index);
+            HapticFeedback.selectionClick();
+          }
+        },
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          color: Colors.transparent,
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                isActive ? item.activeIcon : item.icon,
-                color: isActive
-                    ? context.primaryColor
-                    : context.colorScheme.onBackground.withOpacity(0.5),
-                size: 24,
-              ),
-              const SizedBox(height: AppTheme.spacing4),
-              Text(
-                item.label,
-                style: context.textTheme.labelSmall?.copyWith(
+              // Icon with background
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                padding: EdgeInsets.all(AppTheme.spacing8),
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? context.primaryColor.withOpacity(0.15)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                ),
+                child: Icon(
+                  isActive ? activeIcon : inactiveIcon,
                   color: isActive
                       ? context.primaryColor
-                      : context.colorScheme.onBackground.withOpacity(0.5),
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                      : context.theme.hintColor,
+                  size: 24,
+                ),
+              ),
+
+              SizedBox(height: AppTheme.spacing4),
+
+              // Label
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 200),
+                style: TextStyle(
+                  fontSize: isActive ? 11 : 10,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                  color: isActive
+                      ? context.primaryColor
+                      : context.theme.hintColor,
+                ),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -124,16 +171,4 @@ class _MainNavigationState extends State<MainNavigation> {
       ),
     );
   }
-}
-
-class NavigationItem {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-
-  const NavigationItem({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-  });
 }

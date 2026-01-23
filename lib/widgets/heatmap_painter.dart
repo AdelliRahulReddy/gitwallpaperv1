@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import '../models/contribution_data.dart';
 import '../core/date_utils.dart';
+import '../core/constants.dart';
+
+// ══════════════════════════════════════════════════════════════════════════
+// 🎨 HEATMAP PAINTER - CLEAN & EFFICIENT
+// ══════════════════════════════════════════════════════════════════════════
+// Renders GitHub contribution heatmap on canvas for wallpaper generation
+// ══════════════════════════════════════════════════════════════════════════
 
 class HeatmapPainter extends CustomPainter {
   final CachedContributionData data;
@@ -31,469 +37,315 @@ class HeatmapPainter extends CustomPainter {
     this.paddingBottom = 0.0,
     this.paddingLeft = 0.0,
     this.paddingRight = 0.0,
-    this.cornerRadius = 0.0,
+    this.cornerRadius = 2.0,
     this.quoteFontSize = 14.0,
     this.quoteOpacity = 1.0,
   });
 
+  // ════════════════════════════════════════════════════════════════════════
+  // 🎨 MAIN PAINT
+  // ════════════════════════════════════════════════════════════════════════
+
   @override
   void paint(Canvas canvas, Size size) {
-    // ✅ GUARD: Validate canvas size
-    if (size.width <= 0 || size.height <= 0) {
-      debugPrint('HeatmapPainter: Invalid canvas size: $size');
-      return;
-    }
+    if (size.width <= 0 || size.height <= 0) return;
 
-    // ✅ GUARD: Validate parameters
-    final safeScale = scale.clamp(0.3, 3.0);
+    final safeScale = scale.clamp(0.1, 5.0);
     final safeOpacity = opacity.clamp(0.0, 1.0);
-    final safeQuoteOpacity = quoteOpacity.clamp(0.0, 1.0);
 
-    if (safeScale != scale || safeOpacity != opacity) {
-      debugPrint('HeatmapPainter: Clamped invalid parameters');
-    }
+    // Background
+    final bgPaint = Paint()..color = _getBackgroundColor();
+    canvas.drawRect(Offset.zero & size, bgPaint);
 
+    // Content (with error handling)
     try {
-      _paintSafe(canvas, size, safeScale, safeOpacity, safeQuoteOpacity);
-    } catch (e, stackTrace) {
-      debugPrint('HeatmapPainter: Rendering error: $e');
-      debugPrint('Stack trace: $stackTrace');
-
-      // ✅ Draw error indicator instead of crashing
-      _drawErrorState(canvas, size);
+      _paintContent(canvas, size, safeScale, safeOpacity);
+    } catch (e) {
+      debugPrint('HeatmapPainter Error: $e');
+      _drawError(canvas, size);
     }
   }
 
-  void _paintSafe(
+  // ════════════════════════════════════════════════════════════════════════
+  // 📐 CONTENT LAYOUT
+  // ════════════════════════════════════════════════════════════════════════
+
+  void _paintContent(
     Canvas canvas,
     Size size,
     double safeScale,
     double safeOpacity,
-    double safeQuoteOpacity,
   ) {
-    // Draw background
-    final bgPaint = Paint()
-      ..color = isDarkMode ? const Color(0xFF0D1117) : const Color(0xFFFFFFFF);
-    canvas.drawRect(Offset.zero & size, bgPaint);
-
-    // Calculate layout
+    // Calculate grid dimensions
     final daysInMonth = AppDateUtils.getDaysInCurrentMonth();
     final firstWeekday = AppDateUtils.getFirstWeekdayOfMonth();
-    // Offset for Sunday start (0 = Sun, 1 = Mon, ..., 6 = Sat)
-    final offset = firstWeekday % 7; 
+    final offset = firstWeekday % 7;
     const cols = 7;
     final rows = ((daysInMonth + offset) / cols).ceil();
 
-    // Use padding for margins
-    final marginX = size.width * 0.05;
-    final marginY = size.height * 0.08;
-
-    final availableWidth = size.width - (marginX * 2);
-    final availableHeight = size.height - (marginY * 2);
-
-    // ✅ GUARD: Check available space
-    if (availableWidth <= 0 || availableHeight <= 0) {
-      debugPrint('HeatmapPainter: Insufficient space after margins');
-      return;
-    }
-
     // Calculate cell size
-    const cellSpacingRatio = 0.15;
-    final totalCellUnits = cols + (cols - 1) * cellSpacingRatio;
+    final baseMargin = size.width * 0.05;
+    final effectiveWidth =
+        size.width - (baseMargin * 2) - paddingLeft - paddingRight;
 
-    // ✅ GUARD: Prevent division by zero
-    if (totalCellUnits == 0) {
-      debugPrint('HeatmapPainter: Invalid cell calculation');
-      return;
-    }
-
-    final baseCellSize = availableWidth / totalCellUnits;
+    final baseCellSize = effectiveWidth / 8.5;
     final cellSize = baseCellSize * safeScale;
-
-    // ✅ GUARD: Ensure minimum renderable cell size
-    if (cellSize < 8.0) {
-      debugPrint(
-        'HeatmapPainter: Cell too small ($cellSize), using minimum 8.0',
-      );
-      // Still render, but with minimum size
-    }
-
-    final cellSpacing = cellSize * cellSpacingRatio;
+    final cellSpacing = cellSize * 0.2;
 
     // Grid dimensions
-    final heatmapWidth = (cols * cellSize) + ((cols - 1) * cellSpacing);
-    final heatmapHeight = (rows * cellSize) + ((rows - 1) * cellSpacing);
+    final gridWidth = (cols * cellSize) + ((cols - 1) * cellSpacing);
+    final gridHeight = (rows * cellSize) + ((rows - 1) * cellSpacing);
 
-    // Layout sections - Measure actual heights
-    final headerPainter = _getHeaderPainter(heatmapWidth, cellSize, safeOpacity);
-    final headerHeight = headerPainter.height;
-    final headerGap = cellSize * 1.5; // ✅ INCREASED: from 0.8 to 1.5 to prevent collapsing
+    // Section heights
+    final headerHeight = cellSize * 1.5;
+    final statsHeight = cellSize * 2.0;
+    final quoteHeight = customQuote.isNotEmpty ? cellSize * 3.0 : 0.0;
 
-    final statsHeight = _getStatsHeight(heatmapWidth, cellSize);
-    final statsGap = cellSize * 0.5;
+    final gapLarge = cellSize * 1.0;
+    final gapSmall = cellSize * 0.5;
 
-    final quotePainter = customQuote.isNotEmpty 
-        ? _getQuotePainter(heatmapWidth, cellSize, safeOpacity, safeQuoteOpacity)
-        : null;
-    final quoteHeight = quotePainter?.height ?? 0.0;
-
-    final totalContentHeight =
+    final totalHeight =
         headerHeight +
-        headerGap +
-        heatmapHeight +
-        statsGap +
+        gapLarge +
+        gridHeight +
+        gapSmall +
         statsHeight +
-        (quoteHeight > 0 ? statsGap * 1.5 + quoteHeight : 0);
+        (quoteHeight > 0 ? gapLarge + quoteHeight : 0);
 
-    // Center content
-    final centerX =
-        marginX +
-        (availableWidth - heatmapWidth) * horizontalPosition.clamp(0.0, 1.0);
-    final centerY =
-        marginY +
-        (availableHeight - totalContentHeight) *
-            verticalPosition.clamp(0.0, 1.0);
+    // Positioning
+    final anchorX =
+        (size.width - gridWidth) * horizontalPosition.clamp(0.0, 1.0);
+    final anchorY =
+        (size.height - totalHeight) * verticalPosition.clamp(0.0, 1.0);
+    final startX = anchorX + paddingLeft - paddingRight;
+    final startY = anchorY + paddingTop - paddingBottom;
 
+    // Draw sections
     canvas.save();
-    canvas.translate(centerX, centerY);
+    canvas.translate(startX, startY);
 
     double currentY = 0;
 
-    // 1. Draw month header
-    _drawCenteredHeaderFromPainter(canvas, heatmapWidth, headerPainter);
-    currentY += headerHeight + headerGap;
+    // Header
+    _drawHeader(canvas, gridWidth, cellSize, safeOpacity);
+    currentY += headerHeight + gapLarge;
 
-    // 2. Draw heatmap grid
+    // Grid
     canvas.save();
     canvas.translate(0, currentY);
-    _drawHeatmapGrid(
+    _drawGrid(
       canvas,
       cellSize,
       cellSpacing,
       cols,
-      rows,
       daysInMonth,
-      offset, // Pass offset here
+      offset,
       safeOpacity,
     );
     canvas.restore();
-    currentY += heatmapHeight + statsGap;
+    currentY += gridHeight + gapSmall;
 
-    // 3. Draw stats row
+    // Stats
     canvas.save();
     canvas.translate(0, currentY);
-    _drawCenteredStats(canvas, heatmapWidth, cellSize, safeOpacity);
+    _drawStats(canvas, gridWidth, cellSize, safeOpacity);
     canvas.restore();
     currentY += statsHeight;
 
-    // 4. Draw quote if provided
-    if (quotePainter != null) {
-      currentY += statsGap * 1.5; // Extra gap before quote
+    // Quote
+    if (customQuote.isNotEmpty) {
+      currentY += gapLarge;
       canvas.save();
       canvas.translate(0, currentY);
-      _drawCenteredQuoteFromPainter(canvas, heatmapWidth, quotePainter);
+      _drawQuote(canvas, gridWidth, safeOpacity);
       canvas.restore();
     }
 
     canvas.restore();
   }
 
-  TextPainter _getHeaderPainter(double heatmapWidth, double cellSize, double safeOpacity) {
-    final monthName = AppDateUtils.getCurrentMonthName();
-    final year = DateTime.now().year;
-    final headerText = '$monthName $year';
+  // ════════════════════════════════════════════════════════════════════════
+  // 🖼️ DRAWING COMPONENTS
+  // ════════════════════════════════════════════════════════════════════════
 
-    final painter = TextPainter(
-      text: TextSpan(
-        text: headerText,
-        style: TextStyle(
-          color: (isDarkMode ? Colors.white : Colors.black).withOpacity(
-            safeOpacity,
-          ),
-          fontSize: (cellSize * 1.8).clamp(14.0, 100.0), // ✅ Slightly larger min
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.2,
-        ),
+  void _drawHeader(Canvas canvas, double width, double cellSize, double alpha) {
+    final text = '${AppDateUtils.getCurrentMonthName()} ${DateTime.now().year}'
+        .toUpperCase();
+    final fontSize = (cellSize * 1.2).clamp(12.0, 48.0);
+
+    _drawCenteredText(
+      canvas,
+      text,
+      width,
+      0,
+      TextStyle(
+        color: _getTextColor().withOpacity(alpha),
+        fontSize: fontSize,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 4.0,
       ),
-      textDirection: TextDirection.ltr,
     );
-    painter.layout(maxWidth: heatmapWidth);
-    return painter;
   }
 
-  void _drawCenteredHeaderFromPainter(
+  void _drawGrid(
     Canvas canvas,
-    double heatmapWidth,
-    TextPainter painter,
-  ) {
-    final headerX = (heatmapWidth - painter.width) / 2;
-    painter.paint(canvas, Offset(headerX, 0));
-  }
-
-  void _drawHeatmapGrid(
-    Canvas canvas,
-    double cellSize,
-    double cellSpacing,
+    double size,
+    double spacing,
     int cols,
-    int rows,
-    int daysInMonth,
+    int days,
     int offset,
-    double safeOpacity,
+    double alpha,
   ) {
-    final currentDay = AppDateUtils.getCurrentDayOfMonth();
+    final now = DateTime.now();
 
-    for (int day = 1; day <= daysInMonth; day++) {
-      final index = day - 1 + offset;
-      final row = index ~/ cols;
+    for (int i = 1; i <= days; i++) {
+      final index = i - 1 + offset;
       final col = index % cols;
+      final row = index ~/ cols;
 
-      final x = col * (cellSize + cellSpacing);
-      final y = row * (cellSize + cellSpacing);
+      final x = col * (size + spacing);
+      final y = row * (size + spacing);
 
-      final contributions = data.dailyContributions[day] ?? 0;
-      final color = _getContributionColor(contributions);
+      final count = data.dailyContributions[i] ?? 0;
+      final color = _getCellColor(count);
 
-      final cellPaint = Paint()
-        ..color = color.withOpacity(safeOpacity)
-        ..style = PaintingStyle.fill;
-
-      final radius = cellSize * 0.15;
+      // Draw cell
+      final paint = Paint()..color = color.withOpacity(alpha);
       final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(x, y, cellSize, cellSize),
-        Radius.circular(cornerRadius > 0 ? cornerRadius : radius),
+        Rect.fromLTWH(x, y, size, size),
+        Radius.circular(cornerRadius),
       );
+      canvas.drawRRect(rect, paint);
 
-      canvas.drawRRect(rect, cellPaint);
-
-      // Draw day number inside cell (only if cell is large enough)
-      if (cellSize >= 12.0) {
-        final dayPainter = TextPainter(
-          text: TextSpan(
-            text: '$day',
-            style: TextStyle(
-              color: _getTextColorForCell(
-                contributions,
-                day <= currentDay,
-              ).withOpacity(safeOpacity),
-              fontSize: (cellSize * 0.4).clamp(
-                8.0,
-                24.0,
-              ), // ✅ Min/max font size
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          textDirection: TextDirection.ltr,
-          textAlign: TextAlign.center,
-        );
-        dayPainter.layout();
-
-        final textX = x + (cellSize - dayPainter.width) / 2;
-        final textY = y + (cellSize - dayPainter.height) / 2;
-        dayPainter.paint(canvas, Offset(textX, textY));
+      // Today indicator
+      if (i == now.day) {
+        final borderPaint = Paint()
+          ..color = AppConstants.todayHighlight.withOpacity(alpha)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = size * 0.15;
+        canvas.drawRRect(rect.deflate(size * 0.05), borderPaint);
       }
     }
   }
 
-  double _getStatsHeight(double heatmapWidth, double cellSize) {
-    // Measure icons and labels
-    final iconFontSize = (cellSize * 0.9).clamp(14.0, 48.0);
-    final labelFontSize = (cellSize * 0.45).clamp(10.0, 20.0);
-    // Rough estimate but safe: icon height + margin + label height
-    // Better to use representative painters
-    return iconFontSize + 4 + labelFontSize + 8;
-  }
-
-  void _drawCenteredStats(
-    Canvas canvas,
-    double heatmapWidth,
-    double cellSize,
-    double safeOpacity,
-  ) {
+  void _drawStats(Canvas canvas, double width, double cellSize, double alpha) {
     final stats = [
-      {'label': 'Total', 'value': '${data.totalContributions}', 'icon': '📊'},
-      {'label': 'Streak', 'value': '${data.currentStreak}d', 'icon': '🔥'},
-      {'label': 'Today', 'value': '${data.todayCommits}', 'icon': '✨'},
+      'TOTAL: ${data.totalContributions}',
+      'STREAK: ${data.currentStreak}',
+      'TODAY: ${data.todayCommits}',
     ];
 
-    final statWidth = heatmapWidth / stats.length;
+    final fontSize = (cellSize * 0.5).clamp(8.0, 16.0);
+    final sectionWidth = width / stats.length;
 
     for (int i = 0; i < stats.length; i++) {
-      final stat = stats[i];
-      final centerX = statWidth * i + statWidth / 2;
-
-      // Icon
-      final iconPainter = TextPainter(
-        text: TextSpan(
-          text: stat['icon'],
-          style: TextStyle(
-            fontSize: (cellSize * 0.9).clamp(14.0, 48.0), 
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      );
-      iconPainter.layout();
-
-      // Value
-      final valuePainter = TextPainter(
-        text: TextSpan(
-          text: stat['value'],
-          style: TextStyle(
-            color: (isDarkMode ? Colors.white : Colors.black).withOpacity(
-              safeOpacity,
-            ),
-            fontSize: (cellSize * 0.7).clamp(12.0, 36.0), 
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      );
-      valuePainter.layout();
-
-      // Label
-      final labelPainter = TextPainter(
-        text: TextSpan(
-          text: stat['label'],
-          style: TextStyle(
-            color: (isDarkMode ? Colors.white70 : Colors.black54).withOpacity(
-              safeOpacity,
-            ),
-            fontSize: (cellSize * 0.45).clamp(10.0, 20.0), 
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      );
-      labelPainter.layout();
-
-      // Draw centered
-      final totalStatWidth = iconPainter.width + 8 + valuePainter.width;
-      final startX = centerX - totalStatWidth / 2;
-
-      iconPainter.paint(canvas, Offset(startX, 0));
-      valuePainter.paint(
+      final x = sectionWidth * i;
+      _drawCenteredText(
         canvas,
-        Offset(
-          startX + iconPainter.width + 8,
-          (iconPainter.height - valuePainter.height) / 2,
+        stats[i],
+        sectionWidth,
+        x,
+        TextStyle(
+          color: _getTextColor().withOpacity(alpha * 0.7),
+          fontSize: fontSize,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.0,
         ),
-      );
-      labelPainter.paint(
-        canvas,
-        Offset(centerX - labelPainter.width / 2, iconPainter.height + 4),
+        verticalCenter: cellSize * 2.0,
       );
     }
   }
 
-  TextPainter _getQuotePainter(
-    double heatmapWidth,
-    double cellSize,
-    double safeOpacity,
-    double safeQuoteOpacity,
-  ) {
+  void _drawQuote(Canvas canvas, double width, double alpha) {
     final painter = TextPainter(
       text: TextSpan(
         text: '"$customQuote"',
         style: TextStyle(
-          color: (isDarkMode ? Colors.white70 : Colors.black54).withOpacity(
-            safeOpacity * safeQuoteOpacity,
-          ),
-          fontSize: (cellSize * 0.55).clamp(12.0, 24.0),
+          color: _getTextColor().withOpacity(alpha * quoteOpacity),
+          fontSize: quoteFontSize,
           fontStyle: FontStyle.italic,
+          fontFamily: 'serif',
         ),
       ),
-      textDirection: TextDirection.ltr,
-      maxLines: 2,
       textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+      maxLines: 3,
     );
-    painter.layout(maxWidth: heatmapWidth);
-    return painter;
+    painter.layout(maxWidth: width);
+    painter.paint(canvas, Offset((width - painter.width) / 2, 0));
   }
 
-  void _drawCenteredQuoteFromPainter(
+  void _drawError(Canvas canvas, Size size) {
+    final paint = Paint()..color = Colors.red.withOpacity(0.3);
+    canvas.drawRect(Offset.zero & size, paint);
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // 🔧 HELPERS
+  // ════════════════════════════════════════════════════════════════════════
+
+  void _drawCenteredText(
     Canvas canvas,
-    double heatmapWidth,
-    TextPainter painter,
-  ) {
-    final quoteX = (heatmapWidth - painter.width) / 2;
-    painter.paint(canvas, Offset(quoteX, 0));
-  }
-
-  /// ✅ GitHub contribution color scale (darker = more contributions)
-  Color _getContributionColor(int contributions) {
-    if (isDarkMode) {
-      if (contributions == 0) {
-        return const Color(0xFF161B22);
-      } else if (contributions <= 3) {
-        return const Color(0xFF0E4429);
-      } else if (contributions <= 6) {
-        return const Color(0xFF006D32);
-      } else if (contributions <= 9) {
-        return const Color(0xFF26A641);
-      } else {
-        return const Color(0xFF39D353);
-      }
-    } else {
-      // Light Mode (GitHub standard light green scale)
-      if (contributions == 0) {
-        return const Color(0xFFEBEDF0);
-      } else if (contributions <= 3) {
-        return const Color(0xFF9BE9A8);
-      } else if (contributions <= 6) {
-        return const Color(0xFF40C463);
-      } else if (contributions <= 9) {
-        return const Color(0xFF30A14E);
-      } else {
-        return const Color(0xFF216E39);
-      }
-    }
-  }
-
-  Color _getTextColorForCell(int contributions, bool isPast) {
-    if (!isPast) {
-      return isDarkMode ? Colors.white24 : Colors.black26;
-    }
-    if (contributions == 0) {
-      return isDarkMode ? Colors.white54 : Colors.black54;
-    } else {
-      return Colors.white;
-    }
-  }
-
-  /// ✅ Draw error state if rendering fails
-  void _drawErrorState(Canvas canvas, Size size) {
-    final errorPaint = Paint()..color = Colors.red.withOpacity(0.1);
-    canvas.drawRect(Offset.zero & size, errorPaint);
-
-    final errorText = TextPainter(
-      text: const TextSpan(
-        text: 'Rendering Error',
-        style: TextStyle(color: Colors.red, fontSize: 16),
-      ),
+    String text,
+    double width,
+    double offsetX,
+    TextStyle style, {
+    double? verticalCenter,
+  }) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
       textDirection: TextDirection.ltr,
     );
-    errorText.layout();
-    errorText.paint(
-      canvas,
-      Offset(
-        (size.width - errorText.width) / 2,
-        (size.height - errorText.height) / 2,
-      ),
-    );
+    painter.layout(maxWidth: width);
+
+    final x = offsetX + (width - painter.width) / 2;
+    final y = verticalCenter != null
+        ? (verticalCenter - painter.height) / 2
+        : 0.0; // ← FIXED: Changed 0 to 0.0
+
+    painter.paint(canvas, Offset(x, y));
+  }
+
+  Color _getCellColor(int count) {
+    if (isDarkMode) {
+      if (count == 0) return AppConstants.heatmapDarkBox;
+      if (count <= 3) return AppConstants.heatmapDarkLevel1;
+      if (count <= 6) return AppConstants.heatmapDarkLevel2;
+      if (count <= 9) return AppConstants.heatmapDarkLevel3;
+      return AppConstants.heatmapDarkLevel4;
+    } else {
+      if (count == 0) return AppConstants.heatmapLightBox;
+      if (count <= 3) return AppConstants.heatmapLightLevel1;
+      if (count <= 6) return AppConstants.heatmapLightLevel2;
+      if (count <= 9) return AppConstants.heatmapLightLevel3;
+      return AppConstants.heatmapLightLevel4;
+    }
+  }
+
+  Color _getBackgroundColor() {
+    return isDarkMode
+        ? AppConstants.heatmapDarkBg
+        : AppConstants.heatmapLightBg;
+  }
+
+  Color _getTextColor() {
+    return isDarkMode ? Colors.white : Colors.black;
   }
 
   @override
-  bool shouldRepaint(HeatmapPainter oldDelegate) {
-    return oldDelegate.verticalPosition != verticalPosition ||
-        oldDelegate.horizontalPosition != horizontalPosition ||
-        oldDelegate.scale != scale ||
-        oldDelegate.opacity != opacity ||
-        oldDelegate.customQuote != customQuote ||
-        oldDelegate.paddingTop != paddingTop ||
-        oldDelegate.paddingBottom != paddingBottom ||
-        oldDelegate.paddingLeft != paddingLeft ||
-        oldDelegate.paddingRight != paddingRight ||
-        oldDelegate.cornerRadius != cornerRadius ||
-        oldDelegate.quoteFontSize != quoteFontSize ||
-        oldDelegate.quoteOpacity != quoteOpacity ||
-        oldDelegate.isDarkMode != isDarkMode;
+  bool shouldRepaint(HeatmapPainter old) {
+    return old.verticalPosition != verticalPosition ||
+        old.horizontalPosition != horizontalPosition ||
+        old.scale != scale ||
+        old.opacity != opacity ||
+        old.customQuote != customQuote ||
+        old.isDarkMode != isDarkMode ||
+        old.cornerRadius != cornerRadius ||
+        old.paddingTop != paddingTop ||
+        old.paddingBottom != paddingBottom ||
+        old.paddingLeft != paddingLeft ||
+        old.paddingRight != paddingRight ||
+        old.quoteFontSize != quoteFontSize ||
+        old.quoteOpacity != quoteOpacity;
   }
 }

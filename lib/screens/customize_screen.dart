@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../core/theme.dart';
-import '../core/constants.dart';
 import '../core/preferences.dart';
 import '../core/wallpaper_service.dart';
-import '../widgets/heatmap_painter.dart';
+import '../core/constants.dart';
 import '../models/contribution_data.dart';
+import '../widgets/heatmap_painter.dart';
+
+// ══════════════════════════════════════════════════════════════════════════
+// 🎨 CUSTOMIZE SCREEN - ACCURATE DEVICE PREVIEW
+// ══════════════════════════════════════════════════════════════════════════
 
 class CustomizeScreen extends StatefulWidget {
   const CustomizeScreen({Key? key}) : super(key: key);
@@ -13,249 +18,272 @@ class CustomizeScreen extends StatefulWidget {
   State<CustomizeScreen> createState() => _CustomizeScreenState();
 }
 
-class _CustomizeScreenState extends State<CustomizeScreen> {
-  // Simplified settings - only essentials
-  double _scale = AppConstants.defaultScale;
-  String _customQuote = '';
+class _CustomizeScreenState extends State<CustomizeScreen>
+    with SingleTickerProviderStateMixin {
+  late CachedContributionData? _cachedData;
+  late TabController _tabController;
+  bool _isApplying = false;
 
-  bool _isSettingWallpaper = false;
+  // Position settings
+  late double _verticalPosition;
+  late double _horizontalPosition;
+
+  // Style settings
+  late double _scale;
+  late double _opacity;
+  late double _cornerRadius;
+
+  // Content settings
+  late String _customQuote;
+  late double _quoteFontSize;
+  late double _quoteOpacity;
   late TextEditingController _quoteController;
+
+  // Wallpaper target (String: "home", "lock", "both")
+  late String _wallpaperTarget;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
     _loadSettings();
   }
 
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _quoteController.dispose();
+    super.dispose();
+  }
+
   void _loadSettings() {
-    try {
-      _scale = AppPreferences.getScale();
-      _customQuote = AppPreferences.getCustomQuote();
-      _quoteController = TextEditingController(text: _customQuote);
-    } catch (e) {
-      debugPrint('CustomizeScreen: Error loading settings: $e');
-      _quoteController = TextEditingController();
-    }
+    _cachedData = AppPreferences.getCachedData();
+
+    _verticalPosition = AppPreferences.getVerticalPosition();
+    _horizontalPosition = AppPreferences.getHorizontalPosition();
+
+    _scale = AppPreferences.getScale();
+    _opacity = AppPreferences.getOpacity();
+    _cornerRadius = AppPreferences.getCornerRadius();
+
+    _customQuote = AppPreferences.getCustomQuote();
+    _quoteFontSize = AppPreferences.getQuoteFontSize();
+    _quoteOpacity = AppPreferences.getQuoteOpacity();
+    _quoteController = TextEditingController(text: _customQuote);
+
+    // Load wallpaper target (String)
+    _wallpaperTarget = AppPreferences.getWallpaperTarget();
   }
 
-  Future<void> _saveSettings() async {
-    try {
-      await AppPreferences.setScale(_scale);
-      await AppPreferences.setCustomQuote(
-        _customQuote.trim(),
-      ); // ✅ Trim whitespace
-    } catch (e) {
-      debugPrint('CustomizeScreen: Error saving settings: $e');
-    }
-  }
+  Future<void> _applyWallpaper() async {
+    if (_isApplying) return;
 
-  Future<void> _setWallpaper() async {
-    // Show dialog to select wallpaper target
-    final target = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Set Wallpaper'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(Icons.lock_outline, color: context.primaryColor),
-              title: const Text('Lock Screen'),
-              onTap: () => Navigator.pop(context, 'lock'),
-            ),
-            ListTile(
-              leading: Icon(Icons.home_outlined, color: context.primaryColor),
-              title: const Text('Home Screen'),
-              onTap: () => Navigator.pop(context, 'home'),
-            ),
-            ListTile(
-              leading: Icon(
-                Icons.phone_android_outlined,
-                color: context.primaryColor,
-              ),
-              title: const Text('Both Screens'),
-              onTap: () => Navigator.pop(context, 'both'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
-    );
-
-    if (target == null) return;
-
-    setState(() => _isSettingWallpaper = true);
+    HapticFeedback.mediumImpact();
+    setState(() => _isApplying = true);
 
     try {
-      // Save settings first
-      await _saveSettings();
-
-      // Save target preference for background updates
-      await AppPreferences.setWallpaperTarget(target);
-
-      // ✅ Get cached data with error handling
-      final data = AppPreferences.getCachedData();
-
-      if (data == null) {
-        throw Exception('No data. Please sync first from Home screen.');
-      }
-
-      debugPrint('CustomizeScreen: Setting wallpaper (target: $target)');
-
-      // ✅ FIXED: Use correct method name
-      final success = await WallpaperService.refreshAndSetWallpaper(
-        target: target,
-      );
-
-      if (!success) {
-        throw Exception('Wallpaper update was skipped (already updated today)');
-      }
+      await WallpaperService.refreshAndSetWallpaper(target: _wallpaperTarget);
 
       if (mounted) {
+        HapticFeedback.heavyImpact();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Wallpaper set successfully!'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: AppTheme.spacing12),
+                Text(_getSuccessMessage()),
+              ],
+            ),
+            backgroundColor: AppTheme.success,
             behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 2),
           ),
         );
       }
     } catch (e) {
-      debugPrint('CustomizeScreen: Set wallpaper error: $e');
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ ${e.toString().replaceAll('Exception: ', '')}'),
-            backgroundColor: Colors.red,
+            content: Text('Failed: $e'),
+            backgroundColor: AppTheme.error,
             behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 3),
           ),
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isSettingWallpaper = false);
-      }
+      if (mounted) setState(() => _isApplying = false);
     }
   }
 
-  Future<void> _resetSettings() async {
-    try {
-      setState(() {
-        _scale = AppConstants.defaultScale;
-        _customQuote = '';
-        _quoteController.text = '';
-      });
-
-      await _saveSettings();
-
-      // Reset all preferences to defaults
-      await AppPreferences.setVerticalPosition(
-        AppConstants.defaultVerticalPosition,
-      );
-      await AppPreferences.setHorizontalPosition(
-        AppConstants.defaultHorizontalPosition,
-      );
-      await AppPreferences.setOpacity(1.0);
-      await AppPreferences.setPaddingTop(0.0);
-      await AppPreferences.setPaddingBottom(0.0);
-      await AppPreferences.setPaddingLeft(0.0);
-      await AppPreferences.setPaddingRight(0.0);
-      await AppPreferences.setCornerRadius(0.0);
-      await AppPreferences.setQuoteFontSize(14.0);
-      await AppPreferences.setQuoteOpacity(1.0);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🔄 Settings reset to defaults'),
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('CustomizeScreen: Reset error: $e');
+  String _getSuccessMessage() {
+    switch (_wallpaperTarget) {
+      case 'home':
+        return 'Home screen wallpaper applied!';
+      case 'lock':
+        return 'Lock screen wallpaper applied!';
+      case 'both':
+        return 'Both screens wallpaper applied!';
+      default:
+        return 'Wallpaper applied!';
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final cachedData = AppPreferences.getCachedData();
-    final isDarkMode = context.theme.brightness == Brightness.dark;
-
     return Scaffold(
       backgroundColor: context.backgroundColor,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header
-            _buildHeader(),
+      appBar: AppBar(
+        title: const Text('Customize'),
+        actions: [
+          IconButton(
+            icon: _isApplying
+                ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: context.primaryColor,
+                    ),
+                  )
+                : const Icon(Icons.check),
+            onPressed: _isApplying ? null : _applyWallpaper,
+            tooltip: 'Apply',
+          ),
+        ],
+      ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final availableHeight = constraints.maxHeight;
+          final previewHeight = availableHeight * 0.70;
+          final controlsHeight = availableHeight * 0.30;
 
-            // 65% Phone Preview
-            Expanded(
-              flex: 65,
-              child: _buildPreviewSection(cachedData, isDarkMode),
-            ),
+          return Column(
+            children: [
+              SizedBox(height: previewHeight, child: _buildAccuratePreview()),
+              SizedBox(height: controlsHeight, child: _buildControls()),
+            ],
+          );
+        },
+      ),
+    );
+  }
 
-            // 35% Simple Controls
-            Expanded(
-              flex: 35,
+  // ════════════════════════════════════════════════════════════════════════
+  // 📱 ACCURATE PREVIEW (Renders at actual wallpaper dimensions)
+  // ════════════════════════════════════════════════════════════════════════
+
+  Widget _buildAccuratePreview() {
+    if (_cachedData == null) {
+      return Center(
+        child: Text(
+          'No Preview Available',
+          style: context.textTheme.bodyMedium?.copyWith(
+            color: context.theme.hintColor,
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      color: context.backgroundColor,
+      padding: EdgeInsets.all(AppTheme.spacing16),
+      child: Center(
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+            border: Border.all(color: context.borderColor, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: context.primaryColor.withOpacity(0.1),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLarge - 2),
+            child: AspectRatio(
+              aspectRatio:
+                  AppConstants.wallpaperWidth / AppConstants.wallpaperHeight,
               child: Container(
-                decoration: BoxDecoration(
-                  color: context.surfaceColor,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(AppTheme.radiusRound),
-                    topRight: Radius.circular(AppTheme.radiusRound),
+                color: AppPreferences.getDarkMode()
+                    ? AppConstants.heatmapDarkBg
+                    : AppConstants.heatmapLightBg,
+                child: FittedBox(
+                  fit: BoxFit.contain,
+                  child: SizedBox(
+                    width: AppConstants.wallpaperWidth,
+                    height: AppConstants.wallpaperHeight,
+                    child: CustomPaint(
+                      painter: HeatmapPainter(
+                        data: _cachedData!,
+                        isDarkMode: AppPreferences.getDarkMode(),
+                        verticalPosition: _verticalPosition,
+                        horizontalPosition: _horizontalPosition,
+                        scale: _scale,
+                        opacity: _opacity,
+                        customQuote: _customQuote,
+                        paddingTop: AppPreferences.getPaddingTop(),
+                        paddingBottom: AppPreferences.getPaddingBottom(),
+                        paddingLeft: AppPreferences.getPaddingLeft(),
+                        paddingRight: AppPreferences.getPaddingRight(),
+                        cornerRadius: _cornerRadius,
+                        quoteFontSize: _quoteFontSize,
+                        quoteOpacity: _quoteOpacity,
+                      ),
+                    ),
                   ),
                 ),
-                child: _buildSimpleControls(),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
-    return Padding(
-      padding: EdgeInsets.all(context.screenPadding.left),
-      child: Row(
+  // ════════════════════════════════════════════════════════════════════════
+  // 🎚️ CONTROLS
+  // ════════════════════════════════════════════════════════════════════════
+
+  Widget _buildControls() {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.theme.cardColor,
+        border: Border(top: BorderSide(color: context.borderColor, width: 1)),
+      ),
+      child: Column(
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Customize',
-                  style: context.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  'Adjust your wallpaper',
-                  style: context.textTheme.bodySmall?.copyWith(
-                    color: context.colorScheme.onBackground.withOpacity(0.6),
-                  ),
-                ),
+          Container(
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: context.borderColor, width: 1),
+              ),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              indicatorColor: context.primaryColor,
+              indicatorWeight: 3,
+              labelColor: context.primaryColor,
+              unselectedLabelColor: context.theme.hintColor,
+              labelStyle: context.textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+              tabs: const [
+                Tab(text: 'POSITION'),
+                Tab(text: 'STYLE'),
+                Tab(text: 'CONTENT'),
               ],
             ),
           ),
-          IconButton(
-            onPressed: _resetSettings,
-            icon: const Icon(Icons.restart_alt_outlined),
-            tooltip: 'Reset to defaults',
-            style: IconButton.styleFrom(
-              backgroundColor: context.colorScheme.error.withOpacity(0.1),
-              foregroundColor: context.colorScheme.error,
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildPositionTab(),
+                _buildStyleTab(),
+                _buildContentTab(),
+              ],
             ),
           ),
         ],
@@ -263,193 +291,319 @@ class _CustomizeScreenState extends State<CustomizeScreen> {
     );
   }
 
-  Widget _buildPreviewSection(CachedContributionData? data, bool isDarkMode) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildPositionTab() {
+    return ListView(
+      padding: EdgeInsets.all(AppTheme.spacing16),
       children: [
-        Text(
-          'Live Preview',
-          style: context.textTheme.titleMedium?.copyWith(
-            color: context.colorScheme.onBackground.withOpacity(0.6),
-          ),
+        _buildSlider(
+          label: 'Vertical',
+          value: _verticalPosition,
+          percentage: (_verticalPosition * 100).round(),
+          onChanged: (v) {
+            setState(() => _verticalPosition = v);
+            AppPreferences.setVerticalPosition(v);
+          },
         ),
-        const SizedBox(height: AppTheme.spacing12),
-
-        // Phone Mockup
-        Flexible(
-          child: AspectRatio(
-            aspectRatio: 9 / 19.5,
-            child: Container(
-              decoration: BoxDecoration(
-                color: context.backgroundColor,
-                borderRadius: BorderRadius.circular(AppTheme.spacing32),
-                border: Border.all(
-                  color: context.colorScheme.onBackground.withOpacity(0.1),
-                  width: 8,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppTheme.spacing24),
-                child: _buildWallpaperPreview(data, isDarkMode),
-              ),
-            ),
-          ),
+        _buildSlider(
+          label: 'Horizontal',
+          value: _horizontalPosition,
+          percentage: (_horizontalPosition * 100).round(),
+          onChanged: (v) {
+            setState(() => _horizontalPosition = v);
+            AppPreferences.setHorizontalPosition(v);
+          },
         ),
       ],
     );
   }
 
-  Widget _buildWallpaperPreview(CachedContributionData? data, bool isDarkMode) {
-    if (data == null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildStyleTab() {
+    return ListView(
+      padding: EdgeInsets.all(AppTheme.spacing16),
+      children: [
+        _buildSlider(
+          label: 'Scale',
+          value: _scale,
+          percentage: (_scale * 100).round(),
+          min: 0.5,
+          max: 2.0,
+          onChanged: (v) {
+            setState(() => _scale = v);
+            AppPreferences.setScale(v);
+          },
+        ),
+        _buildSlider(
+          label: 'Opacity',
+          value: _opacity,
+          percentage: (_opacity * 100).round(),
+          onChanged: (v) {
+            setState(() => _opacity = v);
+            AppPreferences.setOpacity(v);
+          },
+        ),
+        _buildSlider(
+          label: 'Corner',
+          value: _cornerRadius,
+          percentage: (_cornerRadius * 10).round(),
+          min: 0,
+          max: 10,
+          onChanged: (v) {
+            setState(() => _cornerRadius = v);
+            AppPreferences.setCornerRadius(v);
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildContentTab() {
+    return ListView(
+      padding: EdgeInsets.all(AppTheme.spacing16),
+      children: [
+        // ✅ WALLPAPER TARGET SELECTION
+        _buildWallpaperTargetSelector(),
+
+        SizedBox(height: AppTheme.spacing24),
+
+        // Quote TextField
+        TextField(
+          controller: _quoteController,
+          onChanged: (value) {
+            setState(() => _customQuote = value);
+            AppPreferences.setCustomQuote(value);
+          },
+          decoration: const InputDecoration(
+            labelText: 'Quote',
+            hintText: 'Your motivation...',
+          ),
+          maxLength: 50,
+        ),
+        SizedBox(height: AppTheme.spacing16),
+        _buildSlider(
+          label: 'Font Size',
+          value: _quoteFontSize,
+          percentage: _quoteFontSize.round(),
+          min: 10,
+          max: 24,
+          onChanged: (v) {
+            setState(() => _quoteFontSize = v);
+            AppPreferences.setQuoteFontSize(v);
+          },
+        ),
+      ],
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // 🎯 WALLPAPER TARGET SELECTOR
+  // ════════════════════════════════════════════════════════════════════════
+
+  Widget _buildWallpaperTargetSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Icon(
-              Icons.sync_outlined,
-              size: 48,
-              color: context.colorScheme.onBackground.withOpacity(0.3),
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: context.primaryColor,
+                shape: BoxShape.circle,
+              ),
             ),
-            const SizedBox(height: 16),
+            SizedBox(width: AppTheme.spacing8),
             Text(
-              'Sync data from Home first',
-              style: TextStyle(
-                color: context.colorScheme.onBackground.withOpacity(0.6),
-                fontSize: 14,
+              'Apply To',
+              style: context.textTheme.labelMedium?.copyWith(
+                color: context.theme.hintColor,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ],
         ),
-      );
-    }
+        SizedBox(height: AppTheme.spacing12),
 
-    return CustomPaint(
-      painter: HeatmapPainter(
-        data: data,
-        isDarkMode: isDarkMode,
-        verticalPosition: AppPreferences.getVerticalPosition(),
-        horizontalPosition: AppPreferences.getHorizontalPosition(),
-        scale: _scale,
-        opacity: AppPreferences.getOpacity(),
-        customQuote: _customQuote,
-        paddingTop: AppPreferences.getPaddingTop(),
-        paddingBottom: AppPreferences.getPaddingBottom(),
-        paddingLeft: AppPreferences.getPaddingLeft(),
-        paddingRight: AppPreferences.getPaddingRight(),
-        cornerRadius: AppPreferences.getCornerRadius(),
-        quoteFontSize: AppPreferences.getQuoteFontSize(),
-        quoteOpacity: AppPreferences.getQuoteOpacity(),
+        // Home Screen
+        _buildTargetOption(
+          value: 'home',
+          icon: Icons.home,
+          title: 'Home Screen',
+          subtitle: 'Set as home wallpaper only',
+        ),
+
+        // Lock Screen
+        _buildTargetOption(
+          value: 'lock',
+          icon: Icons.lock,
+          title: 'Lock Screen',
+          subtitle: 'Set as lock wallpaper only',
+        ),
+
+        // Both
+        _buildTargetOption(
+          value: 'both',
+          icon: Icons.phone_android,
+          title: 'Both Screens',
+          subtitle: 'Set as home & lock wallpaper',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTargetOption({
+    required String value,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    final isSelected = _wallpaperTarget == value;
+
+    return InkWell(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _wallpaperTarget = value);
+        AppPreferences.setWallpaperTarget(value);
+      },
+      borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+      child: Container(
+        margin: EdgeInsets.only(bottom: AppTheme.spacing8),
+        padding: EdgeInsets.all(AppTheme.spacing12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? context.primaryColor.withOpacity(0.1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+          border: Border.all(
+            color: isSelected ? context.primaryColor : context.borderColor,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(AppTheme.spacing8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? context.primaryColor.withOpacity(0.2)
+                    : context.theme.hintColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: isSelected
+                    ? context.primaryColor
+                    : context.theme.hintColor,
+              ),
+            ),
+            SizedBox(width: AppTheme.spacing12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: context.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: isSelected
+                          ? context.primaryColor
+                          : context.textTheme.bodyMedium?.color,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: context.textTheme.bodySmall?.copyWith(
+                      color: context.theme.hintColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              Icon(Icons.check_circle, color: context.primaryColor, size: 20)
+            else
+              Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: context.theme.hintColor.withOpacity(0.3),
+                    width: 2,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildSimpleControls() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppTheme.spacing16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  // ════════════════════════════════════════════════════════════════════════
+  // 🎚️ SLIDER WIDGET
+  // ════════════════════════════════════════════════════════════════════════
+
+  Widget _buildSlider({
+    required String label,
+    required double value,
+    required int percentage,
+    required ValueChanged<double> onChanged,
+    double min = 0.0,
+    double max = 1.0,
+  }) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: AppTheme.spacing12),
+      child: Row(
         children: [
-          // Scale slider
-          Text('Size', style: context.textTheme.titleMedium),
-          const SizedBox(height: AppTheme.spacing8),
-          Row(
-            children: [
-              Icon(
-                Icons.zoom_out,
-                size: 20,
-                color: context.colorScheme.onBackground.withOpacity(0.5),
-              ),
-              Expanded(
-                child: Slider(
-                  value: _scale,
-                  min: AppConstants.minScale,
-                  max: AppConstants.maxScale,
-                  divisions: 30,
-                  onChanged: (value) {
-                    setState(() => _scale = value);
-                  },
-                  onChangeEnd: (value) => _saveSettings(),
+          SizedBox(
+            width: 70,
+            child: Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: context.primaryColor,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-              Icon(
-                Icons.zoom_in,
-                size: 20,
-                color: context.colorScheme.onBackground.withOpacity(0.5),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: AppTheme.spacing16),
-
-          // Quote input
-          Text('Quote (optional)', style: context.textTheme.titleMedium),
-          const SizedBox(height: AppTheme.spacing8),
-          TextField(
-            controller: _quoteController,
-            onChanged: (value) {
-              // ✅ IMPROVED: Trim whitespace and limit length
-              final trimmed = value.trim();
-              setState(() => _customQuote = trimmed);
-              _saveSettings();
-            },
-            maxLines: 2,
-            maxLength:
-                100, // ✅ Increased from 80 to match preferences.dart limit
-            style: context.textTheme.bodyMedium,
-            decoration: InputDecoration(
-              hintText: 'Enter a motivational quote...',
-              filled: true,
-              fillColor: context.backgroundColor,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-                borderSide: BorderSide.none,
-              ),
-              counterStyle: context.textTheme.bodySmall?.copyWith(
-                color: context.colorScheme.onBackground.withOpacity(0.4),
-              ),
+                SizedBox(width: AppTheme.spacing8),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: context.textTheme.labelSmall?.copyWith(
+                      color: context.theme.hintColor,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-
-          const SizedBox(height: AppTheme.spacing16),
-
-          // Set Wallpaper Button
+          Expanded(
+            child: Slider(
+              value: value,
+              min: min,
+              max: max,
+              onChanged: (v) {
+                onChanged(v);
+                HapticFeedback.selectionClick();
+              },
+            ),
+          ),
           SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _isSettingWallpaper ? null : _setWallpaper,
-              icon: _isSettingWallpaper
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Icon(Icons.wallpaper_outlined),
-              label: Text(_isSettingWallpaper ? 'Setting...' : 'Set Wallpaper'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  vertical: AppTheme.spacing16,
-                ),
+            width: 40,
+            child: Text(
+              '$percentage%',
+              style: context.textTheme.labelSmall?.copyWith(
+                color: context.primaryColor,
+                fontWeight: FontWeight.bold,
               ),
+              textAlign: TextAlign.right,
             ),
           ),
         ],
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _quoteController.dispose();
-    super.dispose();
   }
 }

@@ -3,7 +3,7 @@ import 'package:workmanager/workmanager.dart';
 import '../core/theme.dart';
 import '../core/constants.dart';
 import '../core/preferences.dart';
-import '../main.dart';
+import '../main.dart'; // For restarting app
 import 'setup_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -15,7 +15,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _autoUpdateEnabled = true;
-  bool _isLoading = true;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -23,79 +23,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadSettings();
   }
 
-  Future<void> _loadSettings() async {
-    try {
-      // ✅ FIXED: Use async prefs properly
-      final prefs = await AppPreferences.prefs;
-      setState(() {
-        _autoUpdateEnabled = prefs.getBool('auto_update_enabled') ?? true;
-        _isLoading = false;
-      });
-    } catch (e) {
-      debugPrint('SettingsScreen: Error loading settings: $e');
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _saveSettings() async {
-    try {
-      final prefs = await AppPreferences.prefs;
-      await prefs.setBool('auto_update_enabled', _autoUpdateEnabled);
-    } catch (e) {
-      debugPrint('SettingsScreen: Error saving settings: $e');
-    }
+  void _loadSettings() {
+    // We can use synchronous access since we initialized Prefs in main.dart
+    setState(() {
+      _autoUpdateEnabled =
+          AppPreferences.getBool('auto_update_enabled') ?? true;
+    });
   }
 
   Future<void> _toggleAutoUpdate(bool value) async {
     setState(() => _autoUpdateEnabled = value);
-    await _saveSettings();
+    await AppPreferences.setBool('auto_update_enabled', value);
 
     if (value) {
-      // ✅ FIXED: Register with proper constraints and 24-hour interval
+      // ✅ Register 24-Hour Task
       await Workmanager().registerPeriodicTask(
         AppConstants.wallpaperTaskName,
         AppConstants.wallpaperTaskTag,
-        frequency:
-            AppConstants.updateInterval, // ✅ Uses 24 hours from constants
+        frequency: AppConstants.updateInterval,
         existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
         constraints: Constraints(
           networkType: NetworkType.connected,
-          requiresBatteryNotLow: true, // ✅ Battery safe
-          requiresStorageNotLow: true, // ✅ Storage safe
+          requiresBatteryNotLow: true,
+          requiresStorageNotLow: true,
         ),
         backoffPolicy: BackoffPolicy.exponential,
         backoffPolicyDelay: const Duration(minutes: 15),
       );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Daily auto-update enabled'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-
-      debugPrint('SettingsScreen: Auto-update enabled (24h interval)');
+      if (mounted)
+        _showSnack('✅ Daily auto-update enabled', AppTheme.brandGreen);
     } else {
+      // 🛑 Cancel Task
       await Workmanager().cancelByUniqueName(AppConstants.wallpaperTaskName);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🛑 Auto-update disabled'),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-
-      debugPrint('SettingsScreen: Auto-update disabled');
+      if (mounted) _showSnack('🛑 Auto-update disabled', AppTheme.brandYellow);
     }
   }
 
@@ -103,9 +64,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear All Data?'),
+        title: const Text('Clear all data?'),
         content: const Text(
-          'This will log you out and remove all settings. You\'ll need to set up the app again.',
+          'This will remove your account, token, and all cached stats. You will need to log in again.',
         ),
         actions: [
           TextButton(
@@ -114,48 +75,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
-            ),
-            child: const Text('Clear & Logout'),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.brandRed),
+            child: const Text('Delete Everything'),
           ),
         ],
       ),
     );
 
     if (confirm == true) {
-      try {
-        // Cancel WorkManager tasks
-        await Workmanager().cancelAll();
+      await Workmanager().cancelAll();
+      await AppPreferences.clearAll();
 
-        // Clear all preferences
-        await AppPreferences.clearAll();
-
-        debugPrint('SettingsScreen: All data cleared, returning to setup');
-
-        if (mounted) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const SetupScreen()),
-            (route) => false,
-          );
-        }
-      } catch (e) {
-        debugPrint('SettingsScreen: Error clearing data: $e');
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: ${e.toString()}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const SetupScreen()),
+          (route) => false,
+        );
       }
     }
   }
 
-  /// Navigate to edit account - user can come back!
   Future<void> _editAccount() async {
     final result = await Navigator.push(
       context,
@@ -163,240 +103,262 @@ class _SettingsScreenState extends State<SettingsScreen> {
         builder: (context) => const SetupScreen(canGoBack: true),
       ),
     );
-
-    // If account was updated, refresh the UI
-    if (result == true && mounted) {
-      setState(() {}); // Refresh to show new username
-    }
+    if (result == true && mounted) setState(() {});
   }
+
+  void _showSnack(String msg, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // UI BUILD
+  // ══════════════════════════════════════════════════════════════════════════
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = context.theme.brightness == Brightness.dark;
-
-    if (_isLoading) {
-      return Scaffold(
-        backgroundColor: context.backgroundColor,
-        appBar: AppBar(title: const Text('Settings')),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
+    final isDark = context.isDarkMode;
 
     return Scaffold(
       backgroundColor: context.backgroundColor,
-      appBar: AppBar(title: const Text('Settings')),
-      body: SafeArea(
-        child: ListView(
-          padding: context.screenPadding,
-          children: [
-            // Auto-Update Section
-            _buildSectionHeader('Wallpaper Updates'),
-            const SizedBox(height: AppTheme.spacing12),
-            _buildSettingTile(
-              icon: Icons.autorenew_outlined,
-              title: 'Auto-Update Wallpaper',
-              subtitle: _autoUpdateEnabled
-                  ? 'Active - updates daily' // ✅ FIXED: Changed from "every X hours"
-                  : 'Disabled',
-              trailing: Switch(
-                value: _autoUpdateEnabled,
-                onChanged: _toggleAutoUpdate,
-                activeColor: context.primaryColor,
-              ),
-            ),
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          _buildHeader(),
 
-            const SizedBox(height: AppTheme.spacing12),
-            _buildInfoCard(
-              icon: Icons.info_outline,
-              title: 'How it works',
-              subtitle:
-                  'Your wallpaper automatically updates with the latest GitHub contributions once per day, even when the app is closed.', // ✅ FIXED
-            ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: context.screenPadding,
+              child: Column(
+                children: [
+                  // GENERAL SETTINGS
+                  _buildSectionHeader('General'),
+                  _buildSettingsGroup(
+                    children: [
+                      _buildSwitchTile(
+                        title: 'Auto-Update Wallpaper',
+                        subtitle: 'Refreshes background every 24 hours',
+                        value: _autoUpdateEnabled,
+                        onChanged: _toggleAutoUpdate,
+                        icon: Icons.sync,
+                        iconColor: AppTheme.brandBlue,
+                      ),
+                      _buildDivider(),
+                      _buildSwitchTile(
+                        title: 'Dark Mode',
+                        subtitle: isDark
+                            ? 'Midnight theme active'
+                            : 'Light theme active',
+                        value: isDark,
+                        onChanged: (val) async {
+                          await AppPreferences.setDarkMode(val);
+                          if (mounted) MyApp.restartApp(context);
+                        },
+                        icon: Icons.dark_mode,
+                        iconColor: AppTheme.brandPurple,
+                      ),
+                    ],
+                  ),
 
-            const SizedBox(height: AppTheme.spacing24),
+                  const SizedBox(height: AppTheme.spacing24),
 
-            // Appearance Section
-            _buildSectionHeader('Appearance'),
-            const SizedBox(height: AppTheme.spacing12),
-            _buildSettingTile(
-              icon: Icons.dark_mode_outlined,
-              title: 'Dark Mode',
-              subtitle: isDarkMode ? 'Enabled' : 'Disabled',
-              trailing: Switch(
-                value: isDarkMode,
-                onChanged: (value) async {
-                  await AppPreferences.setDarkMode(value);
-                  // Restart entire app to apply theme everywhere
-                  if (mounted) {
-                    MyApp.restartApp(context);
-                  }
-                },
-                activeColor: context.primaryColor,
-              ),
-            ),
+                  // ACCOUNT SETTINGS
+                  _buildSectionHeader('Account'),
+                  _buildSettingsGroup(
+                    children: [
+                      _buildActionTile(
+                        title: 'GitHub Profile',
+                        subtitle:
+                            '@${AppPreferences.getUsername() ?? "Unknown"}',
+                        icon: Icons.person,
+                        iconColor: context.theme.iconTheme.color!,
+                        onTap: _editAccount,
+                      ),
+                    ],
+                  ),
 
-            const SizedBox(height: AppTheme.spacing24),
+                  const SizedBox(height: AppTheme.spacing32),
 
-            // Account Section
-            _buildSectionHeader('Account'),
-            const SizedBox(height: AppTheme.spacing12),
-            _buildSettingTile(
-              icon: Icons.person_outline,
-              title: 'GitHub Account',
-              subtitle: '@${AppPreferences.getUsername() ?? 'Not connected'}',
-              trailing: Icon(
-                Icons.edit_outlined,
-                size: 20,
-                color: context.primaryColor,
-              ),
-              onTap: _editAccount,
-            ),
+                  // DANGER ZONE
+                  _buildSectionHeader('Danger Zone', color: AppTheme.brandRed),
+                  _buildDangerZone(),
 
-            const SizedBox(height: AppTheme.spacing24),
+                  const SizedBox(height: AppTheme.spacing48),
 
-            // Data Section
-            _buildSectionHeader('Data'),
-            const SizedBox(height: AppTheme.spacing12),
-            _buildSettingTile(
-              icon: Icons.delete_outline,
-              title: 'Clear All Data & Logout',
-              subtitle: 'Remove everything and start fresh',
-              trailing: Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-                color: context.colorScheme.error,
-              ),
-              onTap: _clearCache,
-              isDestructive: true,
-            ),
-
-            const SizedBox(height: AppTheme.spacing24),
-
-            // About Section
-            _buildSectionHeader('About'),
-            const SizedBox(height: AppTheme.spacing12),
-            _buildSettingTile(
-              icon: Icons.info_outline,
-              title: 'Version',
-              subtitle: '1.0.0',
-            ),
-
-            const SizedBox(height: AppTheme.spacing40),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(left: AppTheme.spacing4),
-      child: Text(
-        title.toUpperCase(),
-        style: context.textTheme.labelLarge?.copyWith(
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.0,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSettingTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    Widget? trailing,
-    VoidCallback? onTap,
-    bool isDestructive = false,
-  }) {
-    return Card(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-        child: Padding(
-          padding: const EdgeInsets.all(AppTheme.spacing12),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppTheme.spacing8),
-                decoration: BoxDecoration(
-                  color: isDestructive
-                      ? context.colorScheme.error.withOpacity(0.1)
-                      : context.primaryColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                ),
-                child: Icon(
-                  icon,
-                  color: isDestructive
-                      ? context.colorScheme.error
-                      : context.primaryColor,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: AppTheme.spacing12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: context.textTheme.titleMedium?.copyWith(
-                        color: isDestructive ? context.colorScheme.error : null,
-                        fontWeight: FontWeight.w500,
+                  // FOOTER
+                  Center(
+                    child: Text(
+                      'GitHub Wallpaper v1.0.0\nMade with 💙 and Flutter',
+                      textAlign: TextAlign.center,
+                      style: context.textTheme.bodySmall?.copyWith(
+                        color: context.theme.hintColor,
                       ),
                     ),
-                    const SizedBox(height: AppTheme.spacing4),
-                    Text(subtitle, style: context.textTheme.bodySmall),
-                  ],
-                ),
-              ),
-              if (trailing != null) ...[
-                const SizedBox(width: AppTheme.spacing12),
-                trailing,
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(AppTheme.spacing16),
-      decoration: BoxDecoration(
-        color: context.primaryColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-        border: Border.all(color: context.primaryColor.withOpacity(0.3)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: context.primaryColor, size: 20),
-          const SizedBox(width: AppTheme.spacing12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: context.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
                   ),
-                ),
-                const SizedBox(height: AppTheme.spacing4),
-                Text(
-                  subtitle,
-                  style: context.textTheme.bodySmall?.copyWith(height: 1.5),
-                ),
-              ],
+                  const SizedBox(height: 100), // Bottom padding
+                ],
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return SliverAppBar(
+      backgroundColor: context.backgroundColor,
+      surfaceTintColor: Colors.transparent,
+      expandedHeight: 100,
+      pinned: true,
+      flexibleSpace: FlexibleSpaceBar(
+        titlePadding: EdgeInsets.symmetric(
+          horizontal: context.screenPadding.left,
+          vertical: 16,
+        ),
+        title: Text(
+          'Settings',
+          style: context.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, {Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, left: 4),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          title.toUpperCase(),
+          style: context.textTheme.labelSmall?.copyWith(
+            color: color ?? context.theme.hintColor,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.0,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsGroup({required List<Widget> children}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.theme.cardColor,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+        border: Border.all(color: context.borderColor),
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildDivider() {
+    return Divider(height: 1, thickness: 1, color: context.borderColor);
+  }
+
+  Widget _buildSwitchTile({
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+    required IconData icon,
+    required Color iconColor,
+  }) {
+    return SwitchListTile.adaptive(
+      value: value,
+      onChanged: onChanged,
+      activeColor: AppTheme.brandGreen,
+      title: Text(
+        title,
+        style: context.textTheme.bodyLarge?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      subtitle: Text(subtitle, style: context.textTheme.bodySmall),
+      secondary: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: iconColor.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: iconColor, size: 20),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+      ),
+    );
+  }
+
+  Widget _buildActionTile({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color iconColor,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      onTap: onTap,
+      title: Text(
+        title,
+        style: context.textTheme.bodyLarge?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      subtitle: Text(subtitle, style: context.textTheme.bodySmall),
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: iconColor.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: iconColor, size: 20),
+      ),
+      trailing: Icon(Icons.chevron_right, color: context.theme.hintColor),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+      ),
+    );
+  }
+
+  Widget _buildDangerZone() {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.theme.cardColor,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+        border: Border.all(color: AppTheme.brandRed.withOpacity(0.5)),
+      ),
+      child: ListTile(
+        onTap: _clearCache,
+        title: const Text(
+          'Clear Data & Logout',
+          style: TextStyle(
+            color: AppTheme.brandRed,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        subtitle: const Text('Delete local cache and reset app'),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppTheme.brandRed.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(
+            Icons.delete_outline,
+            color: AppTheme.brandRed,
+            size: 20,
+          ),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       ),
     );
   }

@@ -1,125 +1,164 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 
+// ══════════════════════════════════════════════════════════════════════════
+// ⚙️ APP CONSTANTS - AUTO-DETECT DEVICE
+// ══════════════════════════════════════════════════════════════════════════
+// Single source of truth for all app configuration
+// Now with automatic device dimension detection
+// ══════════════════════════════════════════════════════════════════════════
+
 class AppConstants {
-  // ══════════════════════════════════════════════════════════════════════════
-  // GITHUB API CONFIGURATION
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
+  // 🌐 API CONFIGURATION
+  // ════════════════════════════════════════════════════════════════════════
 
   static const String githubApiUrl = 'https://api.github.com/graphql';
-  static const Duration apiTimeout = Duration(
-    seconds: 30,
-  ); // ✅ Reduced from 60s
+  static const Duration apiTimeout = Duration(seconds: 30);
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // GITHUB DARK THEME COLORS
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
+  // 🎨 HEATMAP COLORS
+  // ════════════════════════════════════════════════════════════════════════
 
-  static const Color darkBackground = Color(0xFF0D1117);
-  static const Color darkSurface = Color(0xFF161B22);
-  static const Color darkBorder = Color(0xFF30363D);
-  static const Color darkTextPrimary = Color(0xFFC9D1D9);
-  static const Color darkTextSecondary = Color(0xFF8B949E);
-  static const Color darkAccent = Color(0xFF58A6FF);
-  static const Color darkSuccess = Color(0xFF238636);
+  // Dark Mode
+  static const Color heatmapDarkBg = Color(0xFF0D1117);
+  static const Color heatmapDarkBox = Color(0xFF161B22);
+  static const Color heatmapDarkLevel1 = Color(0xFF0E4429);
+  static const Color heatmapDarkLevel2 = Color(0xFF006D32);
+  static const Color heatmapDarkLevel3 = Color(0xFF26A641);
+  static const Color heatmapDarkLevel4 = Color(0xFF39D353);
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // GITHUB LIGHT THEME COLORS
-  // ══════════════════════════════════════════════════════════════════════════
+  // Light Mode
+  static const Color heatmapLightBg = Color(0xFFFFFFFF);
+  static const Color heatmapLightBox = Color(0xFFEBEDF0);
+  static const Color heatmapLightLevel1 = Color(0xFF9BE9A8);
+  static const Color heatmapLightLevel2 = Color(0xFF40C463);
+  static const Color heatmapLightLevel3 = Color(0xFF30A14E);
+  static const Color heatmapLightLevel4 = Color(0xFF216E39);
 
-  static const Color lightBackground = Color(0xFFFFFFFF);
-  static const Color lightSurface = Color(0xFFF6F8FA);
-  static const Color lightBorder = Color(0xFFD0D7DE);
-  static const Color lightTextPrimary = Color(0xFF24292F);
-  static const Color lightTextSecondary = Color(0xFF57606A);
-  static const Color lightAccent = Color(0xFF0969DA);
-  static const Color lightSuccess = Color(0xFF2DA44E);
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // CONTRIBUTION COLORS (GitHub Green Scale)
-  // ══════════════════════════════════════════════════════════════════════════
-
-  // Dark mode contribution levels
-  static const Color level0 = Color(0xFF161B22); // Empty
-  static const Color level1 = Color(0xFF0E4429); // 1-3 contributions
-  static const Color level2 = Color(0xFF006D32); // 4-6 contributions
-  static const Color level3 = Color(0xFF26A641); // 7-9 contributions
-  static const Color level4 = Color(0xFF39D353); // 10+ contributions
-
-  // Light mode contribution levels
-  static const Color level0Light = Color(0xFFEBEDF0); // Empty
-  static const Color level1Light = Color(0xFF9BE9A8); // 1-3 contributions
-  static const Color level2Light = Color(0xFF40C463); // 4-6 contributions
-  static const Color level3Light = Color(0xFF30A14E); // 7-9 contributions
-  static const Color level4Light = Color(0xFF216E39); // 10+ contributions
-
-  // Today highlight (orange glow)
+  // Highlights
   static const Color todayHighlight = Color(0xFFFF9500);
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // HEATMAP DISPLAY SETTINGS
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
+  // 📐 HEATMAP LAYOUT
+  // ════════════════════════════════════════════════════════════════════════
 
-  static const double boxSize = 12.0; // Size of each day square
-  static const double boxSpacing = 3.0; // Gap between squares
-  static const double boxRadius = 2.0; // Corner radius of squares
-  static const double todayBorderWidth = 2.0; // Border width for today's square
+  static const double boxSize = 12.0;
+  static const double boxSpacing = 3.0;
+  static const double boxRadius = 2.0;
+  static const double todayBorderWidth = 2.0;
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // DEFAULT WALLPAPER POSITION
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
+  // 🖼️ WALLPAPER SETTINGS - AUTO-DETECTED
+  // ════════════════════════════════════════════════════════════════════════
 
-  static const double defaultVerticalPosition = 0.5; // Centered vertically
-  static const double defaultHorizontalPosition = 0.5; // Centered horizontally
-  static const double defaultScale = 0.7; // 70% size
+  // Defaults
+  static const double defaultVerticalPosition = 0.5;
+  static const double defaultHorizontalPosition = 0.5;
+  static const double defaultScale = 0.7;
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // CUSTOMIZATION RANGES
-  // ══════════════════════════════════════════════════════════════════════════
-
-  // Position ranges (0.0 = top/left, 1.0 = bottom/right)
+  // Limits
   static const double minVerticalPos = 0.0;
   static const double maxVerticalPos = 1.0;
-
-  // Scale range (0.5 = 50% size, 2.0 = 200% size)
   static const double minScale = 0.5;
   static const double maxScale = 2.0;
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // WORKMANAGER CONFIGURATION (BACKGROUND TASKS)
-  // ══════════════════════════════════════════════════════════════════════════
+  // Resolution - AUTO-DETECTED (initialized at runtime)
+  static late double wallpaperWidth;
+  static late double wallpaperHeight;
+
+  // Fallback defaults (if detection fails)
+  static const double fallbackWidth = 1080.0;
+  static const double fallbackHeight = 2340.0;
+
+  // Flag to track if device was detected
+  static bool _isInitialized = false;
+
+  /// Initialize wallpaper dimensions from device
+  /// Call this ONCE when app starts
+  static void initializeFromContext(BuildContext context) {
+    if (_isInitialized) {
+      debugPrint('⚠️ AppConstants already initialized, skipping...');
+      return;
+    }
+
+    try {
+      final size = MediaQuery.of(context).size;
+      final pixelRatio = MediaQuery.of(context).devicePixelRatio;
+
+      // Calculate physical pixels
+      wallpaperWidth = size.width * pixelRatio;
+      wallpaperHeight = size.height * pixelRatio;
+
+      _isInitialized = true;
+
+      // Log device info
+      debugPrint('═══════════════════════════════════════════════');
+      debugPrint('📱 DEVICE AUTO-DETECTED');
+      debugPrint('═══════════════════════════════════════════════');
+      debugPrint(
+        'Logical Size:    ${size.width.toStringAsFixed(1)} × ${size.height.toStringAsFixed(1)} dp',
+      );
+      debugPrint(
+        'Physical Pixels: ${wallpaperWidth.toStringAsFixed(0)} × ${wallpaperHeight.toStringAsFixed(0)} px',
+      );
+      debugPrint('Pixel Ratio:     ${pixelRatio.toStringAsFixed(2)}x');
+      debugPrint(
+        'Aspect Ratio:    ${(wallpaperHeight / wallpaperWidth).toStringAsFixed(3)} : 1',
+      );
+      debugPrint('═══════════════════════════════════════════════');
+    } catch (e) {
+      debugPrint('❌ Failed to detect device dimensions: $e');
+      debugPrint('📱 Using fallback: $fallbackWidth × $fallbackHeight');
+      wallpaperWidth = fallbackWidth;
+      wallpaperHeight = fallbackHeight;
+      _isInitialized = true;
+    }
+  }
+
+  /// Check if device dimensions are initialized
+  static bool get isInitialized => _isInitialized;
+
+  /// Get aspect ratio (height/width)
+  static double get aspectRatio => wallpaperHeight / wallpaperWidth;
+
+  // ════════════════════════════════════════════════════════════════════════
+  // ⏰ BACKGROUND TASKS
+  // ════════════════════════════════════════════════════════════════════════
 
   static const String wallpaperTaskName = 'github-wallpaper-update';
   static const String wallpaperTaskTag = 'updateGitHubWallpaper';
-
-  // ✅ TESTING: Reduced to 15 minutes for verification (Android minimum)
-  static const Duration updateInterval = Duration(minutes: 15);
-
-  // Minimum interval for WorkManager (Android requirement)
+  static const Duration updateInterval = Duration(hours: 24);
   static const Duration minimumInterval = Duration(minutes: 15);
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // STORAGE KEYS (SharedPreferences)
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
+  // 💾 STORAGE KEYS
+  // ════════════════════════════════════════════════════════════════════════
 
+  // User Data
   static const String keyUsername = 'github_username';
   static const String keyToken = 'github_token';
+  static const String keyCachedData = 'cachedData';
+  static const String keyLastUpdate = 'lastUpdate';
+
+  // Appearance
   static const String keyDarkMode = 'isDarkMode';
   static const String keyVerticalPos = 'verticalPosition';
   static const String keyHorizontalPos = 'horizontalPosition';
   static const String keyScale = 'scale';
+
+  // Customization
   static const String keyCustomQuote = 'customQuote';
-  static const String keyCachedData = 'cachedData';
-  static const String keyLastUpdate = 'lastUpdate';
+  static const String keyOpacity = 'opacity';
+  static const String keyCornerRadius = 'cornerRadius';
+  static const String keyQuoteFontSize = 'quoteFontSize';
+  static const String keyQuoteOpacity = 'quoteOpacity';
+  static const String keyPaddingTop = 'paddingTop';
+  static const String keyPaddingBottom = 'paddingBottom';
+  static const String keyPaddingLeft = 'paddingLeft';
+  static const String keyPaddingRight = 'paddingRight';
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // WALLPAPER DIMENSIONS (Standard FHD+ for modern phones)
-  // ══════════════════════════════════════════════════════════════════════════
-
-  static const int wallpaperWidth = 1080; // Full HD width
-  static const int wallpaperHeight =
-      2400; // 20:9 aspect ratio (common on 2020+ phones)
-
-  // Alternative dimensions for different screen ratios
-  static const int wallpaperWidthQHD = 1440; // QHD (1440p)
-  static const int wallpaperHeightQHD = 3200; // QHD height
+  // Preferences
+  static const String keyWallpaperTarget = 'wallpaperTarget';
+  static const String keyAutoUpdate = 'autoUpdate';
 }
