@@ -74,10 +74,8 @@ class GitHubService {
       } on GitHubAPIException {
         rethrow; // Don't retry auth/permission errors
       } on FormatException catch (e) {
-        lastException = GitHubAPIException(
-          'Invalid response from GitHub. Please try again.',
-        );
         if (kDebugMode) debugPrint('⚠️ GitHubService: Parse error: $e');
+        throw GitHubAPIException('Invalid response from GitHub.'); // Don't retry
       } catch (e) {
         lastException = GitHubAPIException('Unexpected error: ${e.toString()}');
         if (kDebugMode) debugPrint('❌ GitHubService: Unexpected error: $e');

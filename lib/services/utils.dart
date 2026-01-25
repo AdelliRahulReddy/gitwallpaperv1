@@ -26,13 +26,30 @@ class AppStrings {
   static const String customizeTitle = 'Visual Designer';
   static const String sectionScaling = 'Scaling & Effects';
   static const String sectionOverlay = 'Custom Overlay';
-  static const String noDataTitle = 'No Data Available';
-  static const String noDataMsg = 'Sync your contributions first to start designing.';
+  static const String noDataTitle = 'No Data Yet';
+  static const String noDataMsg = 'Sync your GitHub contributions to get started.';
   static const String startSync = 'Start Sync';
   static const String applyWallpaper = 'Apply Wallpaper';
   static const String applying = 'Applying...';
-  static const String resetting = 'Settings reset to defaults';
   static const String wallpaperApplied = 'Wallpaper applied! 🎉';
+  
+  // Stats Page
+  static const String statsTitle = 'Detailed Analytics';
+  static const String analyzing = 'Analyzing your contributions...';
+  static const String noDataStats = 'Sync your contributions to view detailed analytics.';
+  static const String keyMetrics = 'Key Performance Metrics';
+  static const String contributionCalendar = 'Contribution Calendar';
+  static const String weeklyActivity = 'Weekly Activity Breakdown';
+  static const String contributionDensity = 'Contribution Density';
+  static const String historyMsg = 'Visual history of your contributions over the past month.';
+  static const String total = 'TOTAL';
+  static const String active = 'ACTIVE';
+  static const String avgDay = 'AVG/DAY';
+  static const String avgCommits = 'Average Commits';
+  static const String activeRatio = 'Active Ratio';
+  static const String refresh = 'Refresh';
+  static const String statsUpdated = 'Stats updated! ✅';
+
   
   // Setup Page
   static const String setupTitle = 'Setup GitHub';
@@ -54,6 +71,25 @@ class AppStrings {
   static const String syncSuccess = 'Data synced successfully! ✅';
   static const String syncFailed = 'Sync failed:';
   static const String credentialsMissing = 'Credentials not found. Please set up again.';
+  static const String loadingContributions = 'Loading your contributions...';
+
+  static const String syncNow = 'Sync Now';
+  static const String keepStreakAlive = 'Keep the coding streak alive.';
+  static const String dashboardOverview = 'Dashboard Overview';
+  static const String activityHeatmap = 'Activity Heatmap';
+  static const String exploreConfigure = 'Explore & Configure';
+  static const String fullStats = 'FULL STATS';
+  static const String visualDesigner = 'Visual Designer';
+  static const String visualDesignerSub = 'Customize colors, scale & position';
+  static const String performanceInsight = 'Performance Insight';
+  static const String performanceInsightSub = 'Deep dive into your coding habits';
+  static const String systemSettings = 'System Settings';
+  static const String systemSettingsSub = 'Account & sync preferences';
+  static const String setWallpaper = 'Set Wallpaper';
+  static const String totalCode = 'Total Code';
+  static const String currentStreak = 'Current Streak';
+  static const String longestStreak = 'Longest Streak';
+  static const String today = 'Today';
 }
 
 class AppLayout {

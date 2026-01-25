@@ -154,21 +154,7 @@ class _CustomizePageState extends State<CustomizePage> {
     );
 
     try {
-      final config = WallpaperConfig(
-        isDarkMode: _isDarkMode,
-        verticalPosition: _verticalPosition,
-        horizontalPosition: _horizontalPosition,
-        scale: _scale.value,
-        opacity: _opacity.value,
-        customQuote: _quoteController.text,
-        quoteFontSize: _quoteFontSize.value,
-        quoteOpacity: _quoteOpacity,
-        paddingTop: _margin,
-        paddingBottom: _margin,
-        paddingLeft: _margin,
-        paddingRight: _margin,
-        cornerRadius: _cornerRadius,
-      );
+      final config = StorageService.getWallpaperConfig() ?? WallpaperConfig.defaults();
 
       await WallpaperService.generateAndSetWallpaper(
         data: _data!,
@@ -222,7 +208,7 @@ class _CustomizePageState extends State<CustomizePage> {
     final previewHeight = MediaQuery.of(context).size.height * 0.45;
 
     return Scaffold(
-      resizeToAvoidBottomInset: false, // Prevent overflow when keyboard opens
+      resizeToAvoidBottomInset: true, // Allow resize for keyboard
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: Text(
@@ -240,43 +226,33 @@ class _CustomizePageState extends State<CustomizePage> {
       ),
       body: Container(
         decoration: const BoxDecoration(gradient: AppTheme.mainBgGradient),
-        child: Column(
+        child: ListView(
+          padding: EdgeInsets.zero,
           children: [
-            // Fixed Preview Area
+            // Preview Area
             SizedBox(
               height: previewHeight + MediaQuery.of(context).padding.top + kToolbarHeight,
               child: _buildPreview(),
             ),
 
-            // Scrollable Controls
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(AppTheme.radiusXL)),
-                ),
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(AppTheme.spacing16, AppTheme.spacing24, AppTheme.spacing16, AppTheme.spacing24),
-                  child: _buildControlPanel(),
-                ),
+            // Controls
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(AppTheme.radiusXL)),
               ),
+              padding: const EdgeInsets.fromLTRB(AppTheme.spacing16, AppTheme.spacing24, AppTheme.spacing16, AppTheme.spacing24),
+              child: _buildControlPanel(),
             ),
+            
+            // Apply Button (Scrolls with content)
+            Padding(
+              padding: const EdgeInsets.all(AppTheme.spacing16),
+              child: _buildApplyButton(),
+            ),
+            SizedBox(height: MediaQuery.of(context).viewInsets.bottom), // Extra padding for safety
           ],
         ),
-      ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(AppTheme.spacing16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 20,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: SafeArea(child: _buildApplyButton()),
       ),
     );
   }

@@ -85,17 +85,24 @@ class StorageService {
   // WALLPAPER CONFIG (Preferences)
   // ════════════════════════════════════════════════════════════════════════
 
-  /// Get wallpaper config
+  /// Get entire wallpaper config object
   static WallpaperConfig? getWallpaperConfig() {
-    _initPrefsSync();
-    final jsonString = _prefs?.getString(AppConfig.keyWallpaperConfig);
-    if (jsonString == null) return null;
-    try {
-      return WallpaperConfig.fromJson(json.decode(jsonString));
-    } catch (e) {
-      if (kDebugMode) debugPrint('Error parsing wallpaper config: $e');
-      return null;
-    }
+    // Return null if critical data missing, or default
+    return WallpaperConfig(
+        isDarkMode: getDarkMode(),
+        verticalPosition: getVerticalPosition(),
+        horizontalPosition: getHorizontalPosition(),
+        scale: getScale(),
+        opacity: getOpacity(),
+        customQuote: getCustomQuote(),
+        quoteFontSize: getQuoteFontSize(),
+        quoteOpacity: getQuoteOpacity(),
+        paddingTop: getPaddingTop(),
+        paddingBottom: getPaddingBottom(),
+        paddingLeft: getPaddingLeft(),
+        paddingRight: getPaddingRight(),
+        cornerRadius: getCornerRadius(),
+    );
   }
 
   /// Save wallpaper config
@@ -106,10 +113,7 @@ class StorageService {
     );
   }
 
-  // Ensure prefs initialized for sync access
-  static void _initPrefsSync() {
-    // This is a best-effort for sync access if needed
-  }
+
 
   // ════════════════════════════════════════════════════════════════════════
   // SECURE TOKEN STORAGE (uses FlutterSecureStorage)

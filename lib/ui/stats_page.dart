@@ -23,7 +23,8 @@ class StatsPage extends StatefulWidget {
 
 class _StatsPageState extends State<StatsPage> {
   CachedContributionData? _data;
-  bool _isLoading = false;
+  bool _isLoading = false; // Initial full-screen loading
+  bool _isSyncing = false; // Background refersh
   String? _errorMessage;
 
   @override
@@ -58,9 +59,11 @@ class _StatsPageState extends State<StatsPage> {
     }
   }
 
-  Future<void> _syncData() async {
+  Future<void> _syncData({bool silent = false}) async {
+    if (_isSyncing) return;
+
     setState(() {
-      _isLoading = true;
+      _isSyncing = true;
       _errorMessage = null;
     });
 
@@ -81,24 +84,48 @@ class _StatsPageState extends State<StatsPage> {
       if (mounted) {
         setState(() {
           _data = data;
-          _isLoading = false;
+          _isSyncing = false;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: SuccessBanner(message: 'Stats updated! ✅'),
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        if (!silent) {
+           ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: SuccessBanner(message: AppStrings.statsUpdated),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _errorMessage = e.toString();
-          _isLoading = false;
+          _isSyncing = false;
         });
+
+        if (!silent) {
+           // Auth error handling
+          final isAuthError = e.toString().toLowerCase().contains('401') || 
+                              e.toString().toLowerCase().contains('credentials');
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${AppStrings.syncFailed} $e'),
+              backgroundColor: AppTheme.error,
+              action: isAuthError ? SnackBarAction(
+                  label: 'Fix',
+                  textColor: Colors.white,
+                  onPressed: () => Navigator.of(context).pushNamed('/settings'), // Assuming route or callback
+              ) : null,
+            ),
+          );
+        }
+      }
+    } finally {
+      if (mounted) {
+         setState(() => _isLoading = false);
       }
     }
   }
@@ -111,7 +138,7 @@ class _StatsPageState extends State<StatsPage> {
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: Text(
-          'Detailed Analytics',
+          AppStrings.statsTitle,
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
             color: AppTheme.textPrimary,
@@ -119,15 +146,15 @@ class _StatsPageState extends State<StatsPage> {
         ),
         actions: [
           IconButton(
-            onPressed: _isLoading ? null : _syncData,
-            icon: _isLoading
+            onPressed: _isSyncing ? null : _syncData,
+            icon: _isSyncing
                 ? const SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.refresh, color: AppTheme.textPrimary),
-            tooltip: 'Refresh',
+            tooltip: AppStrings.refresh,
           ),
           const SizedBox(width: AppTheme.spacing8),
         ],
@@ -145,7 +172,7 @@ class _StatsPageState extends State<StatsPage> {
 
   Widget _buildBody() {
     if (_isLoading && _data == null) {
-      return const LoadingIndicator(message: 'Analyzing your contributions...');
+      return const LoadingIndicator(message: AppStrings.analyzing);
     }
 
     if (_errorMessage != null && _data == null) {
@@ -155,9 +182,9 @@ class _StatsPageState extends State<StatsPage> {
     if (_data == null) {
       return EmptyState(
         icon: Icons.analytics_outlined,
-        title: 'No Data Found',
-        message: 'Sync your contributions to view detailed analytics.',
-        actionLabel: 'Sync Now',
+        title: AppStrings.noDataTitle,
+        message: AppStrings.noDataStats,
+        actionLabel: AppStrings.syncNow,
         onAction: _syncData,
       );
     }
@@ -176,19 +203,19 @@ class _StatsPageState extends State<StatsPage> {
         children: [
           _buildMonthHeader(),
           const SizedBox(height: AppTheme.spacing32),
-          _buildSectionTitle('Key Performance Metrics', Icons.query_stats),
+          _buildSectionTitle(AppStrings.keyMetrics, Icons.query_stats),
           const SizedBox(height: AppTheme.spacing16),
           _buildMetricsGrid(),
           const SizedBox(height: AppTheme.spacing32),
-          _buildSectionTitle('Contribution Calendar', Icons.calendar_view_month),
+          _buildSectionTitle(AppStrings.contributionCalendar, Icons.calendar_view_month),
           const SizedBox(height: AppTheme.spacing16),
           _buildHeatmapCard(),
           const SizedBox(height: AppTheme.spacing32),
-          _buildSectionTitle('Weekly Activity Breakdown', Icons.bar_chart),
+          _buildSectionTitle(AppStrings.weeklyActivity, Icons.bar_chart),
           const SizedBox(height: AppTheme.spacing16),
           _buildActivityCard(),
           const SizedBox(height: AppTheme.spacing32),
-          _buildSectionTitle('Contribution Density', Icons.layers_outlined),
+          _buildSectionTitle(AppStrings.contributionDensity, Icons.layers_outlined),
           const SizedBox(height: AppTheme.spacing16),
           _buildLevelsCard(),
         ],
@@ -263,9 +290,9 @@ class _StatsPageState extends State<StatsPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildSummaryHeaderItem('TOTAL', _data!.totalContributions.toString(), AppTheme.primaryBlue),
-              _buildSummaryHeaderItem('ACTIVE', _data!.activeDaysCount.toString(), AppTheme.successGreen),
-              _buildSummaryHeaderItem('AVG/DAY', _data!.averagePerActiveDay.toStringAsFixed(1), AppTheme.alertOrange),
+              _buildSummaryHeaderItem(AppStrings.total, _data!.totalContributions.toString(), AppTheme.primaryBlue),
+              _buildSummaryHeaderItem(AppStrings.active, _data!.activeDaysCount.toString(), AppTheme.successGreen),
+              _buildSummaryHeaderItem(AppStrings.avgDay, _data!.averagePerActiveDay.toStringAsFixed(1), AppTheme.alertOrange),
             ],
           ),
         ],
@@ -306,28 +333,28 @@ class _StatsPageState extends State<StatsPage> {
           childAspectRatio: 1.3,
           children: [
             StatCard(
-              label: 'Current Streak',
+              label: AppStrings.currentStreak,
               value: '${_data!.currentStreak} d',
               icon: Icons.local_fire_department,
               color: AppTheme.alertOrange,
               gradient: AppTheme.accentOrange,
             ).animate().fadeIn(delay: 100.ms).scale(delay: 100.ms),
             StatCard(
-              label: 'Longest Streak',
+              label: AppStrings.longestStreak,
               value: '${_data!.longestStreak} d',
               icon: Icons.emoji_events,
               color: AppTheme.successGreen,
               gradient: AppTheme.accentGreen,
             ).animate().fadeIn(delay: 200.ms).scale(delay: 200.ms),
             StatCard(
-              label: 'Average Commits',
+              label: AppStrings.avgCommits,
               value: _data!.averagePerActiveDay.toStringAsFixed(1),
               icon: Icons.analytics,
               color: AppTheme.primaryBlue,
               gradient: AppTheme.accentBlue,
             ).animate().fadeIn(delay: 300.ms).scale(delay: 300.ms),
             StatCard(
-              label: 'Active Ratio',
+              label: AppStrings.activeRatio,
               value: '${((_data!.activeDaysCount / _data!.days.length) * 100).toStringAsFixed(0)}%',
               icon: Icons.pie_chart,
               color: AppTheme.brandPurple,
@@ -364,7 +391,7 @@ class _StatsPageState extends State<StatsPage> {
           ),
           const SizedBox(height: AppTheme.spacing12),
           Text(
-            'Visual history of your contributions over the past month.',
+            AppStrings.historyMsg,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppTheme.textSecondary),
             textAlign: TextAlign.center,
           ),

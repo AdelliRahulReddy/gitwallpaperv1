@@ -47,21 +47,7 @@ class _PreviewPageState extends State<PreviewPage> {
 
     try {
       // Load current settings
-      final config = WallpaperConfig(
-        isDarkMode: StorageService.getDarkMode(),
-        verticalPosition: StorageService.getVerticalPosition(),
-        horizontalPosition: StorageService.getHorizontalPosition(),
-        scale: StorageService.getScale(),
-        opacity: StorageService.getOpacity(),
-        customQuote: StorageService.getCustomQuote(),
-        quoteFontSize: StorageService.getQuoteFontSize(),
-        quoteOpacity: StorageService.getQuoteOpacity(),
-        paddingTop: StorageService.getPaddingTop(),
-        paddingBottom: StorageService.getPaddingBottom(),
-        paddingLeft: StorageService.getPaddingLeft(),
-        paddingRight: StorageService.getPaddingRight(),
-        cornerRadius: StorageService.getCornerRadius(),
-      );
+      final config = StorageService.getWallpaperConfig() ?? WallpaperConfig.defaults();
 
       final target = StorageService.getWallpaperTarget();
 
@@ -116,92 +102,103 @@ class _PreviewPageState extends State<PreviewPage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: Column(
-        children: [
-          // Preview area (takes most of screen)
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.all(AppTheme.spacing16),
-              decoration: BoxDecoration(
-                color: theme.cardColor,
-                borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-                border: Border.all(
-                  color: theme.dividerColor,
-                  width: 2,
-                ),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-                child: CustomPaint(
-                  painter: HeatmapPainter(
-                    data: widget.data,
-                    isDarkMode: isDarkMode,
-                    scale: StorageService.getScale() * 0.8,
-                    opacity: StorageService.getOpacity(),
-                  ),
-                ),
-              ),
-            )
-                .animate()
-                .fadeIn(duration: AppTheme.animationNormal)
-                .scale(begin: const Offset(0.95, 0.95)),
-          ),
-
-          // Info text
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacing24),
-            child: Text(
-              'This is a scaled preview. Actual wallpaper will fit your screen perfectly.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.textMuted,
-                    fontStyle: FontStyle.italic,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-
-          const SizedBox(height: AppTheme.spacing16),
-
-          // Action buttons
-          Padding(
-            padding: const EdgeInsets.all(AppTheme.spacing16),
-            child: Row(
-              children: [
-                // Back button
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed:
-                        _isApplying ? null : () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.arrow_back),
-                    label: const Text('Back'),
-                  ),
-                ),
-
-                const SizedBox(width: AppTheme.spacing12),
-
-                // Apply button
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton.icon(
-                    onPressed: _isApplying ? null : _applyWallpaper,
-                    icon: _isApplying
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Column(
+                  children: [
+                    // Preview area (takes most of screen)
+                    Expanded(
+                      child: Container(
+                        margin: const EdgeInsets.all(AppTheme.spacing16),
+                        decoration: BoxDecoration(
+                          color: theme.cardColor,
+                          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                          border: Border.all(
+                            color: theme.dividerColor,
+                            width: 2,
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                          child: CustomPaint(
+                            painter: HeatmapPainter(
+                              data: widget.data,
+                              isDarkMode: isDarkMode,
+                              scale: StorageService.getScale() * 0.8,
+                              opacity: StorageService.getOpacity(),
                             ),
-                          )
-                        : const Icon(Icons.check),
-                    label:
-                        Text(_isApplying ? 'Applying...' : 'Apply Wallpaper'),
-                  ),
+                          ),
+                        ),
+                      )
+                          .animate()
+                          .fadeIn(duration: AppTheme.animationNormal)
+                          .scale(begin: const Offset(0.95, 0.95)),
+                    ),
+          
+                    // Info text
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacing24),
+                      child: Text(
+                        'This is a scaled preview. Actual wallpaper will fit your screen perfectly.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppTheme.textMuted,
+                              fontStyle: FontStyle.italic,
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+          
+                    const SizedBox(height: AppTheme.spacing16),
+          
+                    // Action buttons
+                    Padding(
+                      padding: const EdgeInsets.all(AppTheme.spacing16),
+                      child: Row(
+                        children: [
+                          // Back button
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed:
+                                  _isApplying ? null : () => Navigator.of(context).pop(),
+                              icon: const Icon(Icons.arrow_back),
+                              label: const Text('Back'),
+                            ),
+                          ),
+          
+                          const SizedBox(width: AppTheme.spacing12),
+          
+                          // Apply button
+                          Expanded(
+                            flex: 2,
+                            child: ElevatedButton.icon(
+                              onPressed: _isApplying ? null : _applyWallpaper,
+                              icon: _isApplying
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(Icons.check),
+                              label:
+                                  Text(_isApplying ? 'Applying...' : 'Apply Wallpaper'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

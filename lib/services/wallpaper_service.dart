@@ -31,7 +31,7 @@ class WallpaperService {
   // EXECUTION LOCK (prevent concurrent wallpaper generation)
   // ════════════════════════════════════════════════════════════════════════
 
-  static bool _isRunning = false;
+
 
   // ════════════════════════════════════════════════════════════════════════
   // PUBLIC API - GENERATE & SET WALLPAPER
@@ -43,15 +43,6 @@ class WallpaperService {
     required WallpaperConfig config,
     String target = 'both',
   }) async {
-    // Prevent concurrent execution
-    if (_isRunning) {
-      throw WallpaperException(
-        'Wallpaper generation already in progress. Please wait.',
-      );
-    }
-
-    _isRunning = true;
-
     try {
       if (kDebugMode) {
         debugPrint('═══════════════════════════════════════════════');
@@ -68,7 +59,7 @@ class WallpaperService {
         );
       }
 
-      // Step 2: Save to file
+      // Step 2: Saving to file
       if (kDebugMode) debugPrint('💾 Step 2/3: Saving to file...');
       final filePath = await _saveToFile(imageBytes);
       if (kDebugMode) debugPrint('✅ Saved: $filePath');
@@ -98,8 +89,6 @@ class WallpaperService {
     } catch (e) {
       if (kDebugMode) debugPrint('❌ WallpaperService: Failed: $e');
       rethrow;
-    } finally {
-      _isRunning = false;
     }
   }
 
@@ -122,8 +111,19 @@ class WallpaperService {
 
       final width = AppConfig.wallpaperWidth;
       final height = AppConfig.wallpaperHeight;
+      final effectiveScale = config.scale;
 
-      if (kDebugMode) debugPrint('📐 Rendering Canvas: ${width.toInt()}x${height.toInt()}');
+      // OOM Guard: Limit maximum texture size
+      final projectedWidth = width * effectiveScale;
+      final projectedHeight = height * effectiveScale;
+      
+      if (projectedWidth > 4096 || projectedHeight > 8192) { // 4K Texture limit
+        throw WallpaperException(
+          'Wallpaper resolution too high (${projectedWidth.toInt()}x${projectedHeight.toInt()}). Reduce scale.',
+        );
+      }
+
+      if (kDebugMode) debugPrint('📐 Rendering Canvas: ${width.toInt()}x${height.toInt()} (Scale: $effectiveScale)');
       if (width <= 0 || height <= 0) {
         throw WallpaperException(
             'Invalid canvas dimensions: ${width}x$height');
@@ -323,8 +323,7 @@ class WallpaperService {
     }
   }
 
-  /// Checks if wallpaper generation is currently running
-  static bool get isRunning => _isRunning;
+
 }
 
 // ══════════════════════════════════════════════════════════════════════════

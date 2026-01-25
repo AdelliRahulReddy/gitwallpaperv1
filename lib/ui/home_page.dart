@@ -80,7 +80,25 @@ class _HomePageState extends State<HomePage> {
       final token = await StorageService.getToken();
 
       if (username == null || token == null) {
-        throw Exception('Credentials not found. Please set up again.');
+        if (!silent) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(AppStrings.credentialsMissing),
+              backgroundColor: AppTheme.alertOrange,
+              action: SnackBarAction(
+                label: 'Connect',
+                textColor: Colors.white,
+                onPressed: () {
+                  if (widget.onNavigate != null) {
+                    widget.onNavigate!(3); // Navigate to Settings
+                  }
+                },
+              ),
+            ),
+          );
+        }
+        return;
       }
 
       final service = GitHubService(token: token);
@@ -115,10 +133,19 @@ class _HomePageState extends State<HomePage> {
       });
 
       if (!silent) {
+        // If it's an auth error (401), allow quick navigation to settings
+        final isAuthError = e.toString().toLowerCase().contains('401') || 
+                            e.toString().toLowerCase().contains('credentials');
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Sync failed: $e'),
+            content: Text('${AppStrings.syncFailed} $e'),
             backgroundColor: AppTheme.error,
+            action: isAuthError ? SnackBarAction(
+                label: 'Fix',
+                textColor: Colors.white,
+                onPressed: () => widget.onNavigate?.call(3),
+            ) : null,
           ),
         );
       }
@@ -146,21 +173,7 @@ class _HomePageState extends State<HomePage> {
     );
 
     try {
-      final config = WallpaperConfig(
-        isDarkMode: StorageService.getDarkMode(),
-        verticalPosition: StorageService.getVerticalPosition(),
-        horizontalPosition: StorageService.getHorizontalPosition(),
-        scale: StorageService.getScale(),
-        opacity: StorageService.getOpacity(),
-        customQuote: StorageService.getCustomQuote(),
-        quoteFontSize: StorageService.getQuoteFontSize(),
-        quoteOpacity: StorageService.getQuoteOpacity(),
-        paddingTop: StorageService.getPaddingTop(),
-        paddingBottom: StorageService.getPaddingBottom(),
-        paddingLeft: StorageService.getPaddingLeft(),
-        paddingRight: StorageService.getPaddingRight(),
-        cornerRadius: StorageService.getCornerRadius(),
-      );
+      final config = StorageService.getWallpaperConfig() ?? WallpaperConfig.defaults();
 
       final target = StorageService.getWallpaperTarget();
 
@@ -171,8 +184,7 @@ class _HomePageState extends State<HomePage> {
       );
 
       if (!mounted) return;
-      Navigator.of(context).pop();
-
+      
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: SuccessBanner(message: AppStrings.wallpaperApplied),
@@ -183,14 +195,18 @@ class _HomePageState extends State<HomePage> {
       );
     } catch (e) {
       if (!mounted) return;
-      Navigator.of(context).pop();
-
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to update wallpaper: $e'),
           backgroundColor: AppTheme.error,
         ),
       );
+    } finally {
+      // Safely close the dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
     }
   }
 
@@ -218,7 +234,7 @@ class _HomePageState extends State<HomePage> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.refresh, color: AppTheme.textPrimary),
-            tooltip: 'Sync data',
+            tooltip: AppStrings.startSync,
           ),
           const SizedBox(width: AppTheme.spacing8),
         ],
@@ -236,7 +252,7 @@ class _HomePageState extends State<HomePage> {
               onPressed: _updateWallpaper,
               backgroundColor: AppTheme.primaryBlue,
               icon: const Icon(Icons.wallpaper, color: Colors.white),
-              label: const Text('Set Wallpaper',
+              label: const Text(AppStrings.setWallpaper,
                   style: TextStyle(
                       color: Colors.white, fontWeight: FontWeight.bold)),
               elevation: 8,
@@ -247,7 +263,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildBody() {
     if (_isLoading && _data == null) {
-      return const LoadingIndicator(message: 'Loading your contributions...');
+      return const LoadingIndicator(message: AppStrings.loadingContributions);
     }
 
     if (_errorMessage != null && _data == null) {
@@ -257,9 +273,9 @@ class _HomePageState extends State<HomePage> {
     if (_data == null) {
       return EmptyState(
         icon: Icons.bar_chart,
-        title: 'No Data Yet',
-        message: 'Sync your GitHub contributions to get started.',
-        actionLabel: 'Sync Now',
+        title: AppStrings.noDataTitle,
+        message: AppStrings.noDataMsg,
+        actionLabel: AppStrings.syncNow,
         onAction: _syncData,
       );
     }
@@ -282,15 +298,15 @@ class _HomePageState extends State<HomePage> {
         children: [
           _buildPremiumHeader(username),
           const SizedBox(height: AppTheme.spacing32),
-          _buildSectionHeader('Dashboard Overview', Icons.dashboard_outlined),
+          _buildSectionHeader(AppStrings.dashboardOverview, Icons.dashboard_outlined),
           const SizedBox(height: AppTheme.spacing16),
           _buildStatsGrid(),
           const SizedBox(height: AppTheme.spacing32),
-          _buildSectionHeader('Activity Heatmap', Icons.auto_graph_outlined),
+          _buildSectionHeader(AppStrings.activityHeatmap, Icons.auto_graph_outlined),
           const SizedBox(height: AppTheme.spacing16),
           _buildHeatmapPreview(),
           const SizedBox(height: AppTheme.spacing32),
-          _buildSectionHeader('Explore & Configure', Icons.explore_outlined),
+          _buildSectionHeader(AppStrings.exploreConfigure, Icons.explore_outlined),
           const SizedBox(height: AppTheme.spacing16),
           _buildQuickActions(),
         ],
@@ -337,7 +353,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                 ),
                 Text(
-                  'Keep the coding streak alive.',
+                  AppStrings.keepStreakAlive,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppTheme.textSecondary,
                       ),
@@ -383,28 +399,28 @@ class _HomePageState extends State<HomePage> {
           childAspectRatio: 1.3,
           children: [
             StatCard(
-              label: 'Total Code',
+              label: AppStrings.totalCode,
               value: _data!.totalContributions.toString(),
               icon: Icons.code,
               color: AppTheme.primaryBlue,
               gradient: AppTheme.accentBlue,
             ).animate().fadeIn(delay: 300.ms).scale(delay: 300.ms),
             StatCard(
-              label: 'Current Streak',
+              label: AppStrings.currentStreak,
               value: '${_data!.currentStreak} d',
               icon: Icons.local_fire_department,
               color: AppTheme.alertOrange,
               gradient: AppTheme.accentOrange,
             ).animate().fadeIn(delay: 400.ms).scale(delay: 400.ms),
             StatCard(
-              label: 'Longest Streak',
+              label: AppStrings.longestStreak,
               value: '${_data!.longestStreak} d',
               icon: Icons.emoji_events,
               color: AppTheme.successGreen,
               gradient: AppTheme.accentGreen,
             ).animate().fadeIn(delay: 500.ms).scale(delay: 500.ms),
             StatCard(
-              label: 'Today',
+              label: AppStrings.today,
               value: '${_data!.todayCommits}',
               icon: Icons.today,
               color: AppTheme.brandPurple,
@@ -459,7 +475,7 @@ class _HomePageState extends State<HomePage> {
                     widget.onNavigate!(1);
                   }
                 },
-                child: const Text('FULL STATS'),
+                child: const Text(AppStrings.fullStats),
               ),
             ],
           ),
@@ -528,24 +544,24 @@ class _HomePageState extends State<HomePage> {
           _buildActionTile(
             icon: Icons.palette_outlined,
             iconColor: AppTheme.primaryBlue,
-            title: 'Visual Designer',
-            subtitle: 'Customize colors, scale & position',
+            title: AppStrings.visualDesigner,
+            subtitle: AppStrings.visualDesignerSub,
             index: 2,
           ),
           const Divider(indent: 70, endIndent: 20),
           _buildActionTile(
             icon: Icons.insights_outlined,
             iconColor: AppTheme.successGreen,
-            title: 'Performance Insight',
-            subtitle: 'Deep dive into your coding habits',
+            title: AppStrings.performanceInsight,
+            subtitle: AppStrings.performanceInsightSub,
             index: 1,
           ),
           const Divider(indent: 70, endIndent: 20),
           _buildActionTile(
             icon: Icons.settings_outlined,
             iconColor: AppTheme.textSecondary,
-            title: 'System Settings',
-            subtitle: 'Account & sync preferences',
+            title: AppStrings.systemSettings,
+            subtitle: AppStrings.systemSettingsSub,
             index: 3,
           ),
         ],
