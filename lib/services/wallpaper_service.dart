@@ -31,9 +31,7 @@ class WallpaperService {
   // EXECUTION LOCK (prevent concurrent wallpaper generation)
   // ════════════════════════════════════════════════════════════════════════
 
-
-
-  // ════════════════════════════════════════════════════════════════════════
+  static bool _isGenerating = false;
   // PUBLIC API - GENERATE & SET WALLPAPER
   // ════════════════════════════════════════════════════════════════════════
 
@@ -43,6 +41,13 @@ class WallpaperService {
     required WallpaperConfig config,
     String target = 'both',
   }) async {
+    if (_isGenerating) {
+      if (kDebugMode) debugPrint('⚠️ WallpaperService: Generation already in progress');
+      throw WallpaperException('Wallpaper update already in progress');
+    }
+
+    _isGenerating = true;
+
     try {
       if (kDebugMode) {
         debugPrint('═══════════════════════════════════════════════');
@@ -64,17 +69,22 @@ class WallpaperService {
       final filePath = await _saveToFile(imageBytes);
       if (kDebugMode) debugPrint('✅ Saved: $filePath');
 
-      // Step 3: Set as wallpaper
-      if (kDebugMode) debugPrint('🎨 Step 3/3: Setting wallpaper... Target: $target');
-      if (target == 'both') {
-        if (kDebugMode) debugPrint('🏠 Setting Home Screen...');
-        await _setWallpaper(filePath, 'home');
-        if (kDebugMode) debugPrint('🔒 Setting Lock Screen...');
-        await _setWallpaper(filePath, 'lock');
+      // Step 3: Set as wallpaper (Android only)
+      if (Platform.isAndroid) {
+        if (kDebugMode) debugPrint('🎨 Step 3/3: Setting wallpaper... Target: $target');
+        if (target == 'both') {
+          if (kDebugMode) debugPrint('🏠 Setting Home Screen...');
+          await _setWallpaper(filePath, 'home');
+          if (kDebugMode) debugPrint('🔒 Setting Lock Screen...');
+          await _setWallpaper(filePath, 'lock');
+        } else {
+          await _setWallpaper(filePath, target);
+        }
+        if (kDebugMode) debugPrint('✅ Wallpaper set successfully');
       } else {
-        await _setWallpaper(filePath, target);
+        if (kDebugMode) debugPrint('⚠️ WallpaperService: Skipping automatic set (Android only)');
+        // On iOS/Desktop, we just return the path so they can save/share it
       }
-      if (kDebugMode) debugPrint('✅ Wallpaper set successfully');
 
       // Optional: Cleanup old files to save space
       await cleanupOldWallpapers();
@@ -89,6 +99,8 @@ class WallpaperService {
     } catch (e) {
       if (kDebugMode) debugPrint('❌ WallpaperService: Failed: $e');
       rethrow;
+    } finally {
+      _isGenerating = false;
     }
   }
 
@@ -114,12 +126,16 @@ class WallpaperService {
       final effectiveScale = config.scale;
 
       // OOM Guard: Limit maximum texture size
-      final projectedWidth = width * effectiveScale;
-      final projectedHeight = height * effectiveScale;
+      // NOTE: `width` and `height` are already physical pixels based on device resolution.
+      // `effectiveScale` is the user's zoom level.
+      // Check if the FINAL rendered size exceeds texture limits.
       
-      if (projectedWidth > 4096 || projectedHeight > 8192) { // 4K Texture limit
+      final textureWidth = width;
+      final textureHeight = height;
+      
+      if (textureWidth > 4096 || textureHeight > 8192) { // 4K+ Texture limit check
         throw WallpaperException(
-          'Wallpaper resolution too high (${projectedWidth.toInt()}x${projectedHeight.toInt()}). Reduce scale.',
+          'Wallpaper resolution too high (${textureWidth.toInt()}x${textureHeight.toInt()}). Reduce device resolution or scale.',
         );
       }
 
@@ -138,7 +154,7 @@ class WallpaperService {
         canvas,
         data,
         config,
-        width,
+        width, // Pass logical width (already scaled by setup)
         height,
       ).timeout(_renderTimeout);
 
@@ -204,10 +220,10 @@ class WallpaperService {
     // We pass devicePixelRatio as the multiplier because we are drawing to a high-res image
     HeatmapRenderer.render(
       canvas: canvas,
-      size: Size(width, height),
+      size: Size(width, height), // Dimensions are already full resolution
       data: data,
       config: config,
-      pixelRatio: AppConfig.devicePixelRatio,
+      pixelRatio: 1.0, // Force 1.0: width/height are ALREADY physical pixels (wallpaper resolution)
     );
   }
 

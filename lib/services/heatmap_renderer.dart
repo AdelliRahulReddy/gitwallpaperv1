@@ -17,6 +17,7 @@ class HeatmapRenderer {
     required CachedContributionData data,
     required WallpaperConfig config,
     double pixelRatio = 1.0,
+    bool showHeader = true,
     bool drawBackground = true,
   }) {
     // Background
@@ -50,11 +51,15 @@ class HeatmapRenderer {
     final leftLabelWidth = 25.0 * effectiveScale;
     final contentWidth = gridWidth + leftLabelWidth;
 
-    // We also need to scale padding by pixelRatio to maintain proportions
-    // In original WallpaperService: padding * DPR
-    // In HeatmapRenderer: config.padding * pixelRatio
+    // Fix Padding: Scaling should apply consistently
+    // If pixelRatio represents DPR, we might need to scale padding too, 
+    // but typically config.padding is in logical pixels.
+    // If effectiveScale includes DPR, then we should probably scale padding by effectiveScale?
+    // Wait, let's stick to pixelRatio for padding to match screen density, 
+    // BUT config.padding is usually small (0-100), so let's use effectiveScale for visual consistency with the grid size.
     
-    final paddingMultiplier = pixelRatio; 
+    // CHANGED: Using effectiveScale for padding to ensure it grows/shrinks with the heatmap
+    final paddingMultiplier = effectiveScale; 
 
     final adjustedXOffset = (size.width - contentWidth) * config.horizontalPosition + 
         (config.paddingLeft * paddingMultiplier) - 
@@ -65,14 +70,16 @@ class HeatmapRenderer {
         (config.paddingBottom * paddingMultiplier);
 
     // 1. Draw Header
-    _drawHeader(
-      canvas: canvas, 
-      x: adjustedXOffset + leftLabelWidth, 
-      y: adjustedYOffset - 30 * effectiveScale, 
-      width: gridWidth, 
-      scale: effectiveScale, 
-      isDarkMode: config.isDarkMode
-    );
+    if (showHeader) {
+      _drawHeader(
+        canvas: canvas, 
+        x: adjustedXOffset + leftLabelWidth, 
+        y: adjustedYOffset - 30 * effectiveScale, 
+        width: gridWidth, 
+        scale: effectiveScale, 
+        isDarkMode: config.isDarkMode
+      );
+    }
 
     // 2. Draw Grid
     _drawContributionGrid(
@@ -111,6 +118,9 @@ class HeatmapRenderer {
     }
   }
 
+  // Cache DateFormat to avoid re-creation on every render
+  static final _monthFormatter = intl.DateFormat('MMM yyyy');
+
   static void _drawHeader({
     required Canvas canvas,
     required double x,
@@ -123,7 +133,7 @@ class HeatmapRenderer {
         ? AppConfig.heatmapDarkBox.withValues(alpha: 0.8)
         : AppConfig.heatmapLightBox.withValues(alpha: 0.8);
 
-    final monthName = intl.DateFormat('MMM yyyy').format(DateTime.now());
+    final monthName = _monthFormatter.format(DateTime.now());
     final monthPainter = TextPainter(
       text: TextSpan(
         text: monthName,

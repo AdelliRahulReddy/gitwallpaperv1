@@ -16,7 +16,8 @@ import 'widgets.dart';
 import 'home_page.dart';
 
 class SetupPage extends StatefulWidget {
-  const SetupPage({super.key});
+  final VoidCallback? onSuccess;
+  const SetupPage({super.key, this.onSuccess});
 
   @override
   State<SetupPage> createState() => _SetupPageState();
@@ -34,7 +35,10 @@ class _SetupPageState extends State<SetupPage> {
   @override
   void initState() {
     super.initState();
-    _loadExistingCredentials();
+    // Use post-frame callback for async initialization if strictly needed,
+    // though fire-and-forget is acceptable here for simple field population.
+    // Making it explicit we are starting an async operation.
+    Future.microtask(_loadCredentials); 
   }
 
   @override
@@ -45,9 +49,11 @@ class _SetupPageState extends State<SetupPage> {
   }
 
   // Load existing credentials if any (for editing)
-  void _loadExistingCredentials() async {
+  Future<void> _loadCredentials() async {
     final username = StorageService.getUsername();
     final token = await StorageService.getToken();
+
+    if (!mounted) return;
 
     if (username != null) {
       _usernameController.text = username;
@@ -116,13 +122,17 @@ class _SetupPageState extends State<SetupPage> {
       // Initialize wallpaper dimensions before navigating
       AppConfig.initializeFromContext(context);
 
-      Navigator.of(
-        context,
-      ).pushReplacement(
-          MaterialPageRoute(builder: (_) => HomePage())); // ← Removed const
+      if (widget.onSuccess != null) {
+        widget.onSuccess!();
+      } else {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+      }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = '${AppStrings.syncFailed} $e';
         _isLoading = false;
       });
     }
@@ -206,7 +216,7 @@ class _SetupPageState extends State<SetupPage> {
               children: [
                 // Header
                 Text(
-                  'Connect Your GitHub',
+                  AppStrings.connectGithub,
                   style: theme.textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -218,7 +228,7 @@ class _SetupPageState extends State<SetupPage> {
                 const SizedBox(height: AppTheme.spacing8),
 
                 Text(
-                  'Enter your GitHub username and personal access token to get started.',
+                  AppStrings.enterCredentials,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: AppTheme.textSecondary,
                   ),
@@ -233,8 +243,8 @@ class _SetupPageState extends State<SetupPage> {
                 TextFormField(
                   controller: _usernameController,
                   decoration: const InputDecoration(
-                    labelText: 'GitHub Username',
-                    hintText: 'octocat',
+                    labelText: AppStrings.usernameLabel,
+                    hintText: AppStrings.usernameHint,
                     prefixIcon: Icon(Icons.person_outline),
                   ),
                   keyboardType: TextInputType.text,
@@ -242,10 +252,10 @@ class _SetupPageState extends State<SetupPage> {
                   enabled: !_isLoading,
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Username is required';
+                      return AppStrings.usernameRequired;
                     }
                     if (value.trim().length < 2) {
-                      return 'Username must be at least 2 characters';
+                      return AppStrings.usernameLength;
                     }
                     return null;
                   },
@@ -260,8 +270,8 @@ class _SetupPageState extends State<SetupPage> {
                 TextFormField(
                   controller: _tokenController,
                   decoration: InputDecoration(
-                    labelText: 'Personal Access Token',
-                    hintText: 'ghp_xxxxxxxxxxxxxxxxxxxx',
+                    labelText: AppStrings.tokenLabel,
+                    hintText: AppStrings.tokenHint,
                     prefixIcon: const Icon(Icons.key),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -281,10 +291,10 @@ class _SetupPageState extends State<SetupPage> {
                   onFieldSubmitted: (_) => _validateAndSave(),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Token is required';
+                      return AppStrings.tokenRequired;
                     }
                     if (!GitHubService.isValidTokenFormat(value.trim())) {
-                      return 'Invalid token format (should start with ghp_ or github_pat_)';
+                      return AppStrings.tokenInvalid;
                     }
                     return null;
                   },
@@ -306,7 +316,7 @@ class _SetupPageState extends State<SetupPage> {
                     const SizedBox(width: AppTheme.spacing8),
                     Expanded(
                       child: Text(
-                        'Need a token? Tap the help icon above.',
+                        AppStrings.needToken,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: AppTheme.textMuted,
                         ),
@@ -365,7 +375,7 @@ class _SetupPageState extends State<SetupPage> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text('Connect & Continue'),
+                        : const Text(AppStrings.connectBtn),
                   ),
                 )
                     .animate()
@@ -397,14 +407,14 @@ class _SetupPageState extends State<SetupPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Secure Storage',
+                              AppStrings.secureStorage,
                               style: theme.textTheme.titleSmall?.copyWith(
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                             const SizedBox(height: AppTheme.spacing4),
                             Text(
-                              'Your token is encrypted and stored securely using Android Keystore.',
+                              AppStrings.secureStorageMsg,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: AppTheme.textSecondary,
                               ),

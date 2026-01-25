@@ -15,7 +15,8 @@ import 'theme.dart';
 import 'widgets.dart';
 
 class StatsPage extends StatefulWidget {
-  const StatsPage({super.key});
+  final Function(int)? onNavigate;
+  const StatsPage({super.key, this.onNavigate});
 
   @override
   State<StatsPage> createState() => _StatsPageState();
@@ -117,7 +118,7 @@ class _StatsPageState extends State<StatsPage> {
               action: isAuthError ? SnackBarAction(
                   label: 'Fix',
                   textColor: Colors.white,
-                  onPressed: () => Navigator.of(context).pushNamed('/settings'), // Assuming route or callback
+                  onPressed: () => widget.onNavigate?.call(3),
               ) : null,
             ),
           );
@@ -384,8 +385,10 @@ class _StatsPageState extends State<StatsPage> {
             child: CustomPaint(
               painter: HeatmapPainter(
                 data: _data!,
-                isDarkMode: isDark,
-                scale: 0.85,
+                config: WallpaperConfig.defaults().copyWith(
+                  isDarkMode: isDark,
+                  scale: 0.85,
+                ),
               ),
             ),
           ),
@@ -411,7 +414,12 @@ class _StatsPageState extends State<StatsPage> {
       weekdayContributions[weekday] = (weekdayContributions[weekday] ?? 0) + day.contributionCount;
     }
 
-    final maxVal = weekdayContributions.values.isEmpty ? 1 : weekdayContributions.values.reduce((a, b) => a > b ? a : b);
+    final maxVal = weekdayContributions.values.isEmpty 
+        ? 1 
+        : weekdayContributions.values.reduce((a, b) => a > b ? a : b);
+    // Prevent division by zero if maxVal is 0
+    final safeMax = maxVal > 0 ? maxVal : 1;
+
     final weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
     return Container(
@@ -425,7 +433,7 @@ class _StatsPageState extends State<StatsPage> {
         children: List.generate(7, (index) {
           final weekday = index + 1;
           final count = weekdayContributions[weekday] ?? 0;
-          final percentage = maxVal > 0 ? count / maxVal : 0.0;
+          final percentage = count / safeMax;
 
           return Padding(
             padding: const EdgeInsets.only(bottom: AppTheme.spacing12),
@@ -490,11 +498,11 @@ class _StatsPageState extends State<StatsPage> {
     }
 
     final levelNames = [
-      'Quiet Days',
-      'Low Activity',
-      'Balanced',
-      'High Output',
-      'Peak Coding',
+      AppStrings.levelQuiet,
+      AppStrings.levelLow,
+      AppStrings.levelBalanced,
+      AppStrings.levelHigh,
+      AppStrings.levelPeak,
     ];
 
     final levelColors = [

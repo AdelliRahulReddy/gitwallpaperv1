@@ -187,7 +187,7 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.light,
       scaffoldBackgroundColor: bg,
-      fontFamily: 'Inter',
+      // fontFamily: 'Inter', // Removed to avoid conflict with GoogleFonts
 
       // ColorScheme seeded by focus blue
       colorScheme: ColorScheme.fromSeed(
@@ -215,16 +215,15 @@ class AppTheme {
         ),
       ),
 
-      // Card – frosted glass base (you wrap with BackdropFilter in widgets)
-      cardTheme: CardThemeData(
-        color: Colors.white.withValues(alpha: 0.75),
-        elevation: 0,
-        shadowColor: shadowColor,
+      // Card – frosted glass base
+      cardTheme: const CardThemeData(
+        color: Color(0xBFFFFFFF), // White with 75% opacity (safe const)
+        elevation: 0.0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(radiusXL),
+          borderRadius: BorderRadius.all(Radius.circular(radiusXL)),
           side: BorderSide(
-            color: Colors.white.withValues(alpha: 0.6),
-            width: 1.5,
+             color: Color(0x99FFFFFF), // White with 60% opacity
+             width: 1.5,
           ),
         ),
       ),
@@ -268,7 +267,7 @@ class AppTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryBlue,
           foregroundColor: Colors.white,
-          elevation: 0,
+          elevation: 0.0,
           padding: const EdgeInsets.symmetric(
             horizontal: spacing24,
             vertical: spacing16,
@@ -316,7 +315,7 @@ class AppTheme {
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: primaryBlue,
         foregroundColor: Colors.white,
-        elevation: 10,
+        elevation: 10.0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusLarge),
         ),
@@ -365,8 +364,8 @@ class AppTheme {
       // Dividers – very soft
       dividerTheme: DividerThemeData(
         color: textTertiary.withValues(alpha: 0.2),
-        thickness: 1,
-        space: 1,
+        thickness: 1.0,
+        space: 1.0,
       ),
 
       // Progress indicator – focus blue
@@ -375,14 +374,11 @@ class AppTheme {
         circularTrackColor: textTertiary.withValues(alpha: 0.2),
       ),
 
-      // SnackBar – dark chip over light background
-      snackBarTheme: SnackBarThemeData(
-        backgroundColor: textPrimary,
-        contentTextStyle: textTheme.bodyMedium?.copyWith(color: Colors.white),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(radiusMedium),
-        ),
-        behavior: SnackBarBehavior.floating,
+      // SnackBar – Default neutral style to avoid conflicts
+      snackBarTheme: const SnackBarThemeData(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        behavior: SnackBarBehavior.floating, 
       ),
 
       // Switch – use green for confirmation

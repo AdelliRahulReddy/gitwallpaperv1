@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:intl/intl.dart';
+import 'dart:async'; // Added for Debouncer
 
 // ══════════════════════════════════════════════════════════════════════════
 // 1. APP CONFIGURATION - All constants and settings
@@ -32,6 +33,16 @@ class AppStrings {
   static const String applyWallpaper = 'Apply Wallpaper';
   static const String applying = 'Applying...';
   static const String wallpaperApplied = 'Wallpaper applied! 🎉';
+  static const String goBack = 'Go Back';
+  static const String resetDefaults = 'Settings reset to defaults';
+  static const String labelScale = 'Scale';
+  static const String labelOpacity = 'Opacity';
+  static const String labelFontSize = 'Font Size';
+  static const String labelPadding = 'Padding';
+  static const String labelCornerRadius = 'Corner Radius';
+  static const String customQuote = 'Custom Quote';
+  static const String quoteHint = 'Keep coding...';
+  static const String darkMode = 'Dark Mode Preview';
   
   // Stats Page
   static const String statsTitle = 'Detailed Analytics';
@@ -49,6 +60,11 @@ class AppStrings {
   static const String activeRatio = 'Active Ratio';
   static const String refresh = 'Refresh';
   static const String statsUpdated = 'Stats updated! ✅';
+  static const String levelQuiet = 'Quiet Days';
+  static const String levelLow = 'Low Activity';
+  static const String levelBalanced = 'Balanced';
+  static const String levelHigh = 'High Output';
+  static const String levelPeak = 'Peak Coding';
 
   
   // Setup Page
@@ -64,6 +80,21 @@ class AppStrings {
   static const String githubTokenUrl = 'https://github.com/settings/tokens/new';
   static const String gotIt = 'Got it';
   static const String connectedSuccess = 'Connected successfully! 🎉';
+  
+  static const String connectGithub = 'Connect Your GitHub';
+  static const String enterCredentials = 'Enter your GitHub username and personal access token to get started.';
+  static const String usernameLabel = 'GitHub Username';
+  static const String usernameHint = 'octocat';
+  static const String usernameRequired = 'Username is required';
+  static const String usernameLength = 'Username must be at least 2 characters';
+  static const String tokenLabel = 'Personal Access Token';
+  static const String tokenHint = 'ghp_xxxxxxxxxxxxxxxxxxxx';
+  static const String tokenRequired = 'Token is required';
+  static const String tokenInvalid = 'Invalid token format (should start with ghp_ or github_pat_)';
+  static const String needToken = 'Need a token? Tap the help icon above.';
+  static const String connectBtn = 'Connect & Continue';
+  static const String secureStorage = 'Secure Storage';
+  static const String secureStorageMsg = 'Your token is encrypted and stored securely using Android Keystore.';
 
   // Home Page
   static const String dashboard = 'Dashboard';
@@ -90,6 +121,68 @@ class AppStrings {
   static const String currentStreak = 'Current Streak';
   static const String longestStreak = 'Longest Streak';
   static const String today = 'Today';
+  
+  // Settings Page
+  static const String settingsTitle = 'Settings';
+  static const String sectionAccount = 'Account';
+  static const String sectionPreferences = 'Preferences';
+  static const String sectionData = 'Data Management';
+  static const String sectionHelp = 'Help & Support';
+  static const String sectionAbout = 'About';
+  
+  static const String labelUsername = 'Username';
+  static const String labelUpdateToken = 'Update Token';
+  static const String subUpdateToken = 'Change your GitHub personal access token';
+  static const String labelLogout = 'Logout';
+  static const String subLogout = 'Clear all data and logout';
+  
+  static const String labelAutoUpdate = 'Auto-Update';
+  static const String subAutoUpdate = 'Automatically sync contributions daily';
+  static const String autoUpdateEnabled = 'Auto-update enabled';
+  static const String autoUpdateDisabled = 'Auto-update disabled';
+
+  static const String labelCacheStatus = 'Cache Status';
+  static const String noCachedData = 'No cached data';
+  static const String labelClearCache = 'Clear Cache';
+  static const String subClearCache = 'Remove cached contribution data';
+  static const String labelClearAll = 'Clear All Data';
+  static const String subClearAll = 'Reset app to initial state';
+  static const String cacheCleared = 'Cache cleared successfully';
+  
+  static const String dialogLogoutTitle = 'Logout';
+  static const String dialogLogoutMsg = 'Are you sure you want to logout? This will clear all your data including cached contributions.';
+  static const String dialogClearCacheTitle = 'Clear Cache';
+  static const String dialogClearCacheMsg = 'This will remove cached contribution data. Your settings and credentials will be preserved.';
+  static const String dialogClearAllTitle = 'Clear All Data';
+  static const String dialogClearAllMsg = '⚠️ This will delete ALL app data including your credentials, settings, and cache. You will need to set up the app again.';
+  static const String actionCancel = 'Cancel';
+  static const String actionDeleteAll = 'Delete All';
+  
+  static const String labelDocs = 'Documentation';
+  static const String subDocs = 'Learn how to use the app';
+  static const String labelBug = 'Report Bug';
+  static const String subBug = 'Found an issue? Let us know';
+  static const String labelRate = 'Rate on Play Store';
+  static const String subRate = 'Support us with a review';
+  static const String msgComingSoon = 'Coming soon on Play Store!';
+  
+  static const String labelSource = 'View Source Code';
+  static const String subSource = 'This app is open source';
+  static const String labelDev = 'Developer';
+  static const String subDev = 'Made with ❤️ by Your Name';
+  static const String labelLicense = 'License';
+  static const String subLicense = 'MIT License';
+  static const String urlDocs = 'https://github.com/Start-sys-cmd/github_wallpaper#readme';
+  static const String urlBug = 'https://github.com/Start-sys-cmd/github_wallpaper/issues';
+  static const String urlRepo = 'https://github.com/Start-sys-cmd/github_wallpaper';
+  static const String urlProfile = 'https://github.com/Start-sys-cmd';
+  static const String urlLicense = 'https://github.com/Start-sys-cmd/github_wallpaper/blob/main/LICENSE';
+  
+  // Widgets
+  static const String legendLess = 'Less';
+  static const String legendMore = 'More';
+  static const String errorDefault = 'Something went wrong';
+  static const String errorAuth = 'Authentication failed';
 }
 
 class AppLayout {
@@ -540,5 +633,24 @@ class ConnectivityHelper {
       return 'No internet connection. Please check your WiFi or mobile data.';
     }
     return null; // No error
+  }
+}
+
+/// Helper to debounce actions
+class Debouncer {
+  final int milliseconds;
+  Timer? _timer;
+
+  Debouncer({required this.milliseconds});
+
+  void run(VoidCallback action) {
+    if (_timer != null) {
+      _timer!.cancel();
+    }
+    _timer = Timer(Duration(milliseconds: milliseconds), action);
+  }
+
+  void dispose() {
+    _timer?.cancel();
   }
 }

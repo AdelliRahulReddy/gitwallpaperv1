@@ -127,9 +127,11 @@ class _PreviewPageState extends State<PreviewPage> {
                           child: CustomPaint(
                             painter: HeatmapPainter(
                               data: widget.data,
-                              isDarkMode: isDarkMode,
-                              scale: StorageService.getScale() * 0.8,
-                              opacity: StorageService.getOpacity(),
+                              config: WallpaperConfig.defaults().copyWith(
+                                isDarkMode: isDarkMode,
+                                scale: StorageService.getScale() * 0.8,
+                                opacity: StorageService.getOpacity(),
+                              ),
                             ),
                           ),
                         ),

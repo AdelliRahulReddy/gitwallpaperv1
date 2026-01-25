@@ -20,38 +20,14 @@ import '../services/heatmap_renderer.dart'; // Added import
 
 class HeatmapPainter extends CustomPainter {
   final CachedContributionData data;
-  final bool isDarkMode;
-  final double scale;
-  final double opacity;
-  final double verticalPosition;
-  final double horizontalPosition;
-  final String customQuote;
-  final double quoteFontSize;
-  final double quoteOpacity;
-  final double paddingTop;
-  final double paddingBottom;
-  final double paddingLeft;
-  final double paddingRight;
-  final double cornerRadius;
+  final WallpaperConfig config;
   final bool showHeader;
   final bool showQuote;
   final bool showLegend;
 
   HeatmapPainter({
     required this.data,
-    required this.isDarkMode,
-    this.scale = 1.0,
-    this.opacity = 1.0,
-    this.verticalPosition = 0.5,
-    this.horizontalPosition = 0.5,
-    this.customQuote = '',
-    this.quoteFontSize = 14.0,
-    this.quoteOpacity = 1.0,
-    this.paddingTop = 0.0,
-    this.paddingBottom = 0.0,
-    this.paddingLeft = 0.0,
-    this.paddingRight = 0.0,
-    this.cornerRadius = 4.0,
+    required this.config,
     this.showHeader = true,
     this.showQuote = true,
     this.showLegend = false,
@@ -59,49 +35,36 @@ class HeatmapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Construct config from fields
-    final config = WallpaperConfig(
-      isDarkMode: isDarkMode,
-      scale: scale,
-      verticalPosition: verticalPosition,
-      horizontalPosition: horizontalPosition,
-      paddingLeft: paddingLeft,
-      paddingRight: paddingRight,
-      paddingTop: paddingTop,
-      paddingBottom: paddingBottom,
-      cornerRadius: cornerRadius,
-      customQuote: showQuote ? customQuote : '',
-      quoteFontSize: quoteFontSize,
-      quoteOpacity: quoteOpacity,
-      opacity: opacity,
-    );
-    
     // Delegate to shared renderer
     HeatmapRenderer.render(
       canvas: canvas,
       size: size,
       data: data,
-      config: config,
+      config: config.copyWith(customQuote: showQuote ? config.customQuote : ''),
       drawBackground: false, // Transparent for preview
-      pixelRatio: 1.0, 
+      pixelRatio: 1.0,
+      showHeader: showHeader,
     );
 
     // Draw Legend (Manual handling since Renderer doesn't support it yet)
     if (showLegend) {
        final daysInMonth = DateHelper.getDaysInCurrentMonth();
        final firstWeekday = DateHelper.getFirstWeekdayOfMonth();
-       final boxSize = AppConfig.boxSize * scale;
-       final boxSpacing = AppConfig.boxSpacing * scale;
+       final boxSize = AppConfig.boxSize * config.scale;
+       final boxSpacing = AppConfig.boxSpacing * config.scale;
        final cellSize = boxSize + boxSpacing;
        final numWeeks = ((daysInMonth + firstWeekday - 1) / 7).ceil();
        final gridWidth = numWeeks * cellSize;
        final gridHeight = 7 * cellSize;
        
-       final contentWidth = gridWidth + (25.0 * scale); // grid + labels
-       final xOffset = (size.width - contentWidth) * horizontalPosition + paddingLeft - paddingRight; 
-       final yOffset = (size.height - gridHeight) * verticalPosition + paddingTop - paddingBottom;
+       final contentWidth = gridWidth + (25.0 * config.scale); // grid + labels
        
-       final legendY = yOffset + gridHeight + (showQuote ? 100 : 40) * scale;
+       // Improved layout calculation to prevent overflow
+       final effectiveHPos = (contentWidth > size.width) ? 0.5 : config.horizontalPosition;
+       final xOffset = (size.width - contentWidth) * effectiveHPos + config.paddingLeft - config.paddingRight; 
+       final yOffset = (size.height - gridHeight) * config.verticalPosition + config.paddingTop - config.paddingBottom;
+       
+       final legendY = yOffset + gridHeight + (showQuote ? 100 : 40) * config.scale;
        _drawLegend(canvas, xOffset, legendY);
     }
   }
@@ -110,18 +73,18 @@ class HeatmapPainter extends CustomPainter {
 
   /// Draws contribution level legend
   void _drawLegend(Canvas canvas, double x, double y) {
-    final boxSize = AppConfig.boxSize * scale * 0.7;
-    final spacing = AppConfig.boxSpacing * scale;
+    final boxSize = AppConfig.boxSize * config.scale * 0.7;
+    final spacing = AppConfig.boxSpacing * config.scale;
 
-    final textColor = isDarkMode
+    final textColor = config.isDarkMode
         ? AppConfig.heatmapDarkBox.withValues(alpha: 0.6)
         : AppConfig.heatmapLightBox.withValues(alpha: 0.6);
 
     // "Less" label
     final lessTextPainter = TextPainter(
       text: TextSpan(
-        text: 'Less',
-        style: TextStyle(color: textColor, fontSize: 10 * scale),
+        text: AppStrings.legendLess,
+        style: TextStyle(color: textColor, fontSize: 10 * config.scale),
       ),
       textDirection: ui.TextDirection.ltr,
     )..layout();
@@ -129,16 +92,16 @@ class HeatmapPainter extends CustomPainter {
     lessTextPainter.paint(canvas, Offset(x, y));
 
     // Color boxes
-    final startX = x + lessTextPainter.width + 8 * scale;
+    final startX = x + lessTextPainter.width + 8 * config.scale;
     for (int i = 0; i < 5; i++) {
-      final color = HeatmapRenderer.getContributionColor(i * 3, isDarkMode); // 0, 3, 6, 9, 12
+      final color = HeatmapRenderer.getContributionColor(i * 3, config.isDarkMode); // 0, 3, 6, 9, 12
       final paint = Paint()
-        ..color = color.withValues(alpha: opacity)
+        ..color = color.withValues(alpha: config.opacity)
         ..style = PaintingStyle.fill;
 
       final rect = RRect.fromRectAndRadius(
         Rect.fromLTWH(startX + i * (boxSize + spacing), y, boxSize, boxSize),
-        Radius.circular(cornerRadius * scale * 0.5),
+        Radius.circular(config.cornerRadius * config.scale * 0.5),
       );
       canvas.drawRRect(rect, paint);
     }
@@ -146,15 +109,15 @@ class HeatmapPainter extends CustomPainter {
     // "More" label
     final moreTextPainter = TextPainter(
       text: TextSpan(
-        text: 'More',
-        style: TextStyle(color: textColor, fontSize: 10 * scale),
+        text: AppStrings.legendMore,
+        style: TextStyle(color: textColor, fontSize: 10 * config.scale),
       ),
       textDirection: ui.TextDirection.ltr,
     )..layout();
 
     moreTextPainter.paint(
       canvas,
-      Offset(startX + 5 * (boxSize + spacing) + 8 * scale, y),
+      Offset(startX + 5 * (boxSize + spacing) + 8 * config.scale, y),
     );
   }
 
@@ -162,23 +125,12 @@ class HeatmapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(HeatmapPainter oldDelegate) {
-    return oldDelegate.data != data ||
-        oldDelegate.isDarkMode != isDarkMode ||
-        oldDelegate.scale != scale ||
-        oldDelegate.opacity != opacity ||
-        oldDelegate.verticalPosition != verticalPosition ||
-        oldDelegate.horizontalPosition != horizontalPosition ||
-        oldDelegate.customQuote != customQuote ||
-        oldDelegate.quoteFontSize != quoteFontSize ||
-        oldDelegate.quoteOpacity != quoteOpacity ||
-        oldDelegate.paddingTop != paddingTop ||
-        oldDelegate.paddingBottom != paddingBottom ||
-        oldDelegate.paddingLeft != paddingLeft ||
-        oldDelegate.paddingRight != paddingRight ||
-        oldDelegate.cornerRadius != cornerRadius ||
-        oldDelegate.showHeader != showHeader ||
-        oldDelegate.showQuote != showQuote ||
-        oldDelegate.showLegend != showLegend;
+     if (oldDelegate.data != data) return true;
+     if (oldDelegate.config != config) return true;
+     if (oldDelegate.showHeader != showHeader) return true;
+     if (oldDelegate.showQuote != showQuote) return true;
+     if (oldDelegate.showLegend != showLegend) return true;
+     return false;
   }
 }
 
@@ -284,7 +236,7 @@ class ErrorView extends StatelessWidget {
 
   const ErrorView({
     super.key,
-    this.title = 'Something went wrong',
+    this.title = AppStrings.errorDefault,
     required this.message,
     this.onRetry,
     this.showRetry = true,
@@ -351,7 +303,7 @@ class ErrorView extends StatelessWidget {
               ElevatedButton.icon(
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh, size: AppTheme.iconSmall),
-                label: const Text('Try Again'),
+                label: const Text(AppStrings.tryAgain),
               ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.3, end: 0),
             ],
           ],
@@ -521,7 +473,7 @@ extension GradientExtension on Gradient {
 class LoadingIndicator extends StatelessWidget {
   final String message;
 
-  const LoadingIndicator({super.key, this.message = 'Loading...'});
+  const LoadingIndicator({super.key, this.message = AppStrings.loading});
 
   @override
   Widget build(BuildContext context) {

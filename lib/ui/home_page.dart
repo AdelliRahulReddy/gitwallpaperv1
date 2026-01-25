@@ -32,7 +32,8 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    // Defer data load to avoid 'setState' during build or init races
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
   }
 
   // Load cached data and check if refresh needed
@@ -203,8 +204,8 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     } finally {
-      // Safely close the dialog
-      if (mounted) {
+      // Safely close the dialog only if it is mounted
+      if (mounted && Navigator.canPop(context)) {
         Navigator.of(context).pop();
       }
     }
@@ -488,10 +489,12 @@ class _HomePageState extends State<HomePage> {
               child: CustomPaint(
                 painter: HeatmapPainter(
                   data: _data!,
-                  isDarkMode: isDark,
-                  scale: 0.85,
-                  verticalPosition: 0.5,
-                  horizontalPosition: 0.5,
+                  config: WallpaperConfig.defaults().copyWith(
+                    isDarkMode: isDark,
+                    scale: 0.85,
+                    verticalPosition: 0.5,
+                    horizontalPosition: 0.5,
+                  ),
                 ),
               ),
             ),

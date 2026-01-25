@@ -39,6 +39,8 @@ class _CustomizePageState extends State<CustomizePage> {
   late double _quoteOpacity;
   late double _margin;
   late double _cornerRadius;
+  
+  final _debouncer = Debouncer(milliseconds: 500);
 
   bool _isApplying = false;
 
@@ -55,6 +57,7 @@ class _CustomizePageState extends State<CustomizePage> {
     _scale.dispose();
     _opacity.dispose();
     _quoteFontSize.dispose();
+    _debouncer.dispose();
     super.dispose();
   }
 
@@ -124,7 +127,7 @@ class _CustomizePageState extends State<CustomizePage> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: SuccessBanner(message: 'Settings reset to defaults'),
+          content: SuccessBanner(message: AppStrings.resetDefaults),
           backgroundColor: Colors.transparent,
           elevation: 0,
           behavior: SnackBarBehavior.floating,
@@ -147,7 +150,7 @@ class _CustomizePageState extends State<CustomizePage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const LoadingIndicator(message: 'Applying wallpaper...'),
+            const LoadingIndicator(message: AppStrings.applying),
           ],
         ),
       ),
@@ -163,11 +166,14 @@ class _CustomizePageState extends State<CustomizePage> {
       );
 
       if (!mounted) return;
-      Navigator.of(context).pop();
+      if (!mounted) return;
+      if (Navigator.canPop(context)) Navigator.of(context).pop(); // Pop dialog
+
+      if (mounted && Navigator.canPop(context)) Navigator.of(context).pop(); // Pop page
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: SuccessBanner(message: 'Wallpaper applied! 🎉'),
+          content: SuccessBanner(message: AppStrings.wallpaperApplied),
           backgroundColor: Colors.transparent,
           elevation: 0,
           behavior: SnackBarBehavior.floating,
@@ -177,7 +183,7 @@ class _CustomizePageState extends State<CustomizePage> {
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed: $e'), backgroundColor: AppTheme.error),
+        SnackBar(content: Text('${AppStrings.error}: $e'), backgroundColor: AppTheme.error),
       );
     } finally {
       if (mounted) {
@@ -192,12 +198,12 @@ class _CustomizePageState extends State<CustomizePage> {
 
     if (_data == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text(AppStrings.customizeTitle)),
+          appBar: AppBar(title: const Text(AppStrings.customizeTitle)),
         body: EmptyState(
           icon: Icons.palette_outlined,
           title: AppStrings.noDataTitle,
           message: AppStrings.noDataMsg,
-          actionLabel: 'Go Back',
+          actionLabel: AppStrings.goBack,
           onAction: () => Navigator.of(context).pop(),
         ),
       );
@@ -282,7 +288,7 @@ class _CustomizePageState extends State<CustomizePage> {
               )
             : const Icon(Icons.check_circle, size: 24),
         label: Text(
-          _isApplying ? 'Applying...' : 'Apply Wallpaper',
+          _isApplying ? AppStrings.applying : AppStrings.applyWallpaper,
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -339,19 +345,21 @@ class _CustomizePageState extends State<CustomizePage> {
                     size: Size(previewWidth, previewHeight),
                     painter: HeatmapPainter(
                       data: _data!,
-                      isDarkMode: _isDarkMode,
-                      scale: _scale.value * scaleRatio, 
-                      opacity: _opacity.value,
-                      verticalPosition: _verticalPosition,
-                      horizontalPosition: _horizontalPosition,
-                      customQuote: _quoteController.text,
-                      quoteFontSize: _quoteFontSize.value * _scale.value * scaleRatio, 
-                      quoteOpacity: _quoteOpacity,
-                      paddingTop: _margin * scaleRatio,
-                      paddingBottom: _margin * scaleRatio,
-                      paddingLeft: _margin * scaleRatio,
-                      paddingRight: _margin * scaleRatio,
-                      cornerRadius: _cornerRadius * scaleRatio,
+                      config: WallpaperConfig(
+                        isDarkMode: _isDarkMode,
+                        scale: _scale.value * scaleRatio,
+                        opacity: _opacity.value,
+                        verticalPosition: _verticalPosition,
+                        horizontalPosition: _horizontalPosition,
+                        customQuote: _quoteController.text,
+                        quoteFontSize: _quoteFontSize.value * _scale.value * scaleRatio,
+                        quoteOpacity: _quoteOpacity,
+                        paddingTop: _margin * scaleRatio,
+                        paddingBottom: _margin * scaleRatio,
+                        paddingLeft: _margin * scaleRatio,
+                        paddingRight: _margin * scaleRatio,
+                        cornerRadius: _cornerRadius * scaleRatio,
+                      ),
                     ),
                   );
                 },
@@ -367,24 +375,39 @@ class _CustomizePageState extends State<CustomizePage> {
     return Column(
       children: [
         _buildSection(AppStrings.sectionScaling, [
-        _buildSlider('Scale', _scale, AppConfig.minScale, AppConfig.maxScale, (v) {
+        _buildSlider(AppStrings.labelScale, _scale, AppConfig.minScale, AppConfig.maxScale, (v) {
             _scale.value = v;
-            _saveSettings();
+            _debouncer.run(_saveSettings);
           }, Icons.zoom_in),
           const SizedBox(height: AppTheme.spacing16),
-          _buildSlider('Opacity', _opacity, 0.1, 1.0, (v) {
+          _buildSlider(AppStrings.labelOpacity, _opacity, 0.1, 1.0, (v) {
              _opacity.value = v;
-            _saveSettings();
+            _debouncer.run(_saveSettings);
           }, Icons.opacity),
+          const SizedBox(height: AppTheme.spacing16),
+          _buildSlider(AppStrings.labelPadding, ValueNotifier(_margin), 0.0, 100.0, (v) {
+             setState(() => _margin = v);
+            _debouncer.run(_saveSettings);
+          }, Icons.padding),
         ]),
         const SizedBox(height: AppTheme.spacing16),
         _buildSection(AppStrings.sectionOverlay, [
           _buildQuoteInput(),
           const SizedBox(height: AppTheme.spacing16),
-          _buildSlider('Font Size', _quoteFontSize, 12.0, 72.0, (v) {
+          _buildSlider(AppStrings.labelFontSize, _quoteFontSize, 12.0, 72.0, (v) {
              _quoteFontSize.value = v;
-             _saveSettings();
+             _debouncer.run(_saveSettings);
            }, Icons.format_size),
+           const SizedBox(height: AppTheme.spacing16),
+           SwitchListTile(
+             title: const Text(AppStrings.darkMode, style: TextStyle(fontWeight: FontWeight.w600)),
+             contentPadding: EdgeInsets.zero,
+             value: _isDarkMode,
+             onChanged: (v) {
+               setState(() => _isDarkMode = v);
+               _debouncer.run(_saveSettings);
+             },
+           ),
         ]),
         const SizedBox(height: AppTheme.spacing64), // Extra space for bottom bar
       ],
@@ -451,8 +474,8 @@ class _CustomizePageState extends State<CustomizePage> {
       maxLength: 80,
       maxLines: 2,
       decoration: InputDecoration(
-        labelText: 'Custom Quote',
-        hintText: 'Keep coding...',
+        labelText: AppStrings.customQuote,
+        hintText: AppStrings.quoteHint,
         filled: true,
         fillColor: Colors.white.withValues(alpha: 0.2),
         border: OutlineInputBorder(
@@ -466,7 +489,7 @@ class _CustomizePageState extends State<CustomizePage> {
       ),
       onChanged: (v) {
         setState(() {}); // Rebuild preview with new quote
-        _saveSettings();
+        _debouncer.run(_saveSettings);
       },
     );
   }

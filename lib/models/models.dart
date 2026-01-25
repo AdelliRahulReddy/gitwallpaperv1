@@ -316,4 +316,43 @@ class WallpaperConfig {
   @override
   String toString() =>
       'WallpaperConfig(mode: ${isDarkMode ? "dark" : "light"}, scale: $scale)';
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+  
+    return other is WallpaperConfig &&
+      other.isDarkMode == isDarkMode &&
+      other.verticalPosition == verticalPosition &&
+      other.horizontalPosition == horizontalPosition &&
+      other.scale == scale &&
+      other.opacity == opacity &&
+      other.customQuote == customQuote &&
+      other.quoteFontSize == quoteFontSize &&
+      other.quoteOpacity == quoteOpacity &&
+      other.paddingTop == paddingTop &&
+      other.paddingBottom == paddingBottom &&
+      other.paddingLeft == paddingLeft &&
+      other.paddingRight == paddingRight &&
+      other.cornerRadius == cornerRadius;
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(
+      isDarkMode,
+      verticalPosition,
+      horizontalPosition,
+      scale,
+      opacity,
+      customQuote,
+      quoteFontSize,
+      quoteOpacity,
+      paddingTop,
+      paddingBottom,
+      paddingLeft,
+      paddingRight,
+      cornerRadius,
+    );
+  }
 }

@@ -36,11 +36,16 @@ class _SettingsPageState extends State<SettingsPage> {
     _loadAppInfo();
   }
 
-  void _loadSettings() {
-    setState(() {
-      _username = StorageService.getUsername();
-      _autoUpdate = StorageService.getAutoUpdate();
-    });
+  Future<void> _loadSettings() async {
+    final username = StorageService.getUsername();
+    final autoUpdate = StorageService.getAutoUpdate();
+    
+    if (mounted) {
+      setState(() {
+        _username = username;
+        _autoUpdate = autoUpdate;
+      });
+    }
   }
 
   Future<void> _loadAppInfo() async {
@@ -58,21 +63,23 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _updateToken() async {
     Navigator.of(
       context,
-    ).push(MaterialPageRoute(builder: (_) => const SetupPage()));
+    ).push(MaterialPageRoute(builder: (_) => SetupPage(onSuccess: () {
+      // Refresh credentials after returning from setup
+      _loadSettings();
+      Navigator.pop(context); // Close setup page
+    })));
   }
 
   Future<void> _logout() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text(
-          'Are you sure you want to logout? This will clear all your data including cached contributions.',
-        ),
+        title: const Text(AppStrings.dialogLogoutTitle),
+        content: const Text(AppStrings.dialogLogoutMsg),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: const Text(AppStrings.actionCancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
@@ -80,7 +87,7 @@ class _SettingsPageState extends State<SettingsPage> {
               backgroundColor: AppTheme.error,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Logout'),
+            child: const Text(AppStrings.labelLogout),
           ),
         ],
       ),
@@ -101,18 +108,16 @@ class _SettingsPageState extends State<SettingsPage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear Cache'),
-        content: const Text(
-          'This will remove cached contribution data. Your settings and credentials will be preserved.',
-        ),
+        title: const Text(AppStrings.dialogClearCacheTitle),
+        content: const Text(AppStrings.dialogClearCacheMsg),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: const Text(AppStrings.actionCancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Clear Cache'),
+            child: const Text(AppStrings.labelClearCache),
           ),
         ],
       ),
@@ -125,7 +130,7 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: SuccessBanner(message: 'Cache cleared successfully'),
+          content: SuccessBanner(message: AppStrings.cacheCleared),
           backgroundColor: Colors.transparent,
           elevation: 0,
           behavior: SnackBarBehavior.floating,
@@ -138,14 +143,14 @@ class _SettingsPageState extends State<SettingsPage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear All Data'),
+        title: const Text(AppStrings.dialogClearAllTitle),
         content: const Text(
-          '⚠️ This will delete ALL app data including your credentials, settings, and cache. You will need to set up the app again.',
+          AppStrings.dialogClearAllMsg,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: const Text(AppStrings.actionCancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
@@ -153,7 +158,7 @@ class _SettingsPageState extends State<SettingsPage> {
               backgroundColor: AppTheme.error,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Delete All'),
+            child: const Text(AppStrings.actionDeleteAll),
           ),
         ],
       ),
@@ -190,38 +195,38 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: const Text(AppStrings.settingsTitle)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppTheme.spacing16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Account section
-            _buildSectionHeader('Account', Icons.account_circle),
+            _buildSectionHeader(AppStrings.sectionAccount, Icons.account_circle),
             _buildAccountSection(),
 
             const SizedBox(height: AppTheme.spacing24),
 
             // Preferences section
-            _buildSectionHeader('Preferences', Icons.tune),
+            _buildSectionHeader(AppStrings.sectionPreferences, Icons.tune),
             _buildPreferencesSection(),
 
             const SizedBox(height: AppTheme.spacing24),
 
             // Data Management section
-            _buildSectionHeader('Data Management', Icons.storage),
+            _buildSectionHeader(AppStrings.sectionData, Icons.storage),
             _buildDataSection(),
 
             const SizedBox(height: AppTheme.spacing24),
 
             // Help & Support section
-            _buildSectionHeader('Help & Support', Icons.help_outline),
+            _buildSectionHeader(AppStrings.sectionHelp, Icons.help_outline),
             _buildHelpSection(),
 
             const SizedBox(height: AppTheme.spacing24),
 
             // About section
-            _buildSectionHeader('About', Icons.info_outline),
+            _buildSectionHeader(AppStrings.sectionAbout, Icons.info_outline),
             _buildAboutSection(),
 
             const SizedBox(height: AppTheme.spacing16),
@@ -257,7 +262,7 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           SettingsTile(
             icon: Icons.person,
-            title: 'Username',
+            title: AppStrings.labelUsername,
             subtitle: _username != null ? '@$_username' : 'Not set',
             trailing: const Icon(Icons.chevron_right),
             onTap: _updateToken,
@@ -265,16 +270,16 @@ class _SettingsPageState extends State<SettingsPage> {
           const Divider(height: 1),
           SettingsTile(
             icon: Icons.key,
-            title: 'Update Token',
-            subtitle: 'Change your GitHub personal access token',
+            title: AppStrings.labelUpdateToken,
+            subtitle: AppStrings.subUpdateToken,
             trailing: const Icon(Icons.chevron_right),
             onTap: _updateToken,
           ),
           const Divider(height: 1),
           SettingsTile(
             icon: Icons.logout,
-            title: 'Logout',
-            subtitle: 'Clear all data and logout',
+            title: AppStrings.labelLogout,
+            subtitle: AppStrings.subLogout,
             trailing: const Icon(Icons.chevron_right),
             onTap: _logout,
           ),
@@ -289,8 +294,8 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           SwitchListTile(
             secondary: const Icon(Icons.update),
-            title: const Text('Auto-Update'),
-            subtitle: const Text('Automatically sync contributions daily'),
+            title: const Text(AppStrings.labelAutoUpdate),
+            subtitle: const Text(AppStrings.subAutoUpdate),
             value: _autoUpdate,
             onChanged: (value) async {
               setState(() => _autoUpdate = value);
@@ -300,7 +305,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      value ? 'Auto-update enabled' : 'Auto-update disabled',
+                      value ? AppStrings.autoUpdateEnabled : AppStrings.autoUpdateDisabled,
                     ),
                   ),
                 );
@@ -327,23 +332,23 @@ class _SettingsPageState extends State<SettingsPage> {
             title: const Text('Cache Status'),
             subtitle: Text(
               cachedData != null
-                  ? 'Last updated: ${lastUpdate != null ? DateHelper.formatRelativeTime(lastUpdate) : 'Unknown'}'
-                  : 'No cached data',
+                  ? '${AppStrings.lastUpdated} ${lastUpdate != null ? DateHelper.formatRelativeTime(lastUpdate) : 'Unknown'}'
+                  : AppStrings.noCachedData,
             ),
           ),
           const Divider(height: 1),
           SettingsTile(
             icon: Icons.delete_outline,
-            title: 'Clear Cache',
-            subtitle: 'Remove cached contribution data',
+            title: AppStrings.labelClearCache,
+            subtitle: AppStrings.subClearCache,
             trailing: const Icon(Icons.chevron_right),
             onTap: _clearCache,
           ),
           const Divider(height: 1),
           SettingsTile(
             icon: Icons.delete_forever,
-            title: 'Clear All Data',
-            subtitle: 'Reset app to initial state',
+            title: AppStrings.labelClearAll,
+            subtitle: AppStrings.subClearAll,
             trailing: const Icon(Icons.chevron_right),
             onTap: _clearAllData,
           ),
@@ -361,32 +366,32 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           SettingsTile(
             icon: Icons.book,
-            title: 'Documentation',
-            subtitle: 'Learn how to use the app',
+            title: AppStrings.labelDocs,
+            subtitle: AppStrings.subDocs,
             trailing: const Icon(Icons.open_in_new),
             onTap: () => _launchURL(
-              'https://github.com/yourusername/github-wallpaper#readme',
+              AppStrings.urlDocs,
             ),
           ),
           const Divider(height: 1),
           SettingsTile(
             icon: Icons.bug_report,
-            title: 'Report Bug',
-            subtitle: 'Found an issue? Let us know',
+            title: AppStrings.labelBug,
+            subtitle: AppStrings.subBug,
             trailing: const Icon(Icons.open_in_new),
             onTap: () => _launchURL(
-              'https://github.com/yourusername/github-wallpaper/issues',
+              AppStrings.urlBug,
             ),
           ),
           const Divider(height: 1),
           SettingsTile(
             icon: Icons.star,
-            title: 'Rate on Play Store',
-            subtitle: 'Support us with a review',
+            title: AppStrings.labelRate,
+            subtitle: AppStrings.subRate,
             trailing: const Icon(Icons.open_in_new),
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Coming soon on Play Store!')),
+                const SnackBar(content: Text(AppStrings.msgComingSoon)),
               );
             },
           ),
@@ -404,33 +409,33 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           ListTile(
             leading: const Icon(Icons.apps),
-            title: const Text('GitHub Wallpaper'),
+            title: const Text(AppStrings.appName),
             subtitle: Text('Version $_version (Build $_buildNumber)'),
           ),
           const Divider(height: 1),
           SettingsTile(
             icon: Icons.code,
-            title: 'View Source Code',
-            subtitle: 'This app is open source',
+            title: AppStrings.labelSource,
+            subtitle: AppStrings.subSource,
             trailing: const Icon(Icons.open_in_new),
             onTap: () =>
-                _launchURL('https://github.com/yourusername/github-wallpaper'),
+                _launchURL(AppStrings.urlRepo),
           ),
           const Divider(height: 1),
           SettingsTile(
             icon: Icons.person,
-            title: 'Developer',
-            subtitle: 'Made with ❤️ by Your Name',
+            title: AppStrings.labelDev,
+            subtitle: AppStrings.subDev,
             trailing: const Icon(Icons.open_in_new),
-            onTap: () => _launchURL('https://github.com/yourusername'),
+            onTap: () => _launchURL(AppStrings.urlProfile),
           ),
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.gavel),
-            title: const Text('License'),
-            subtitle: const Text('MIT License'),
+            title: const Text(AppStrings.labelLicense),
+            subtitle: const Text(AppStrings.subLicense),
             onTap: () => _launchURL(
-              'https://github.com/yourusername/github-wallpaper/blob/main/LICENSE',
+              AppStrings.urlLicense,
             ),
           ),
         ],
