@@ -1,170 +1,112 @@
+// ══════════════════════════════════════════════════════════════════════════
+// 🚀 GITHUB WALLPAPER - Main Entry Point
+// ══════════════════════════════════════════════════════════════════════════
+// Initializes services, configures system UI, and routes to appropriate page
+// Calm & Focus premium light theme - Glass & Depth design system
+// ══════════════════════════════════════════════════════════════════════════
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:workmanager/workmanager.dart';
-import 'core/theme.dart';
-import 'core/preferences.dart';
-import 'core/wallpaper_service.dart';
-import 'core/constants.dart';
-import 'screens/onboarding_screen.dart';
-import 'screens/main_navigation.dart';
 
-/// Global key to restart app when theme changes
-final GlobalKey<_MyAppState> appKey = GlobalKey<_MyAppState>();
-
-/// ✅ Background task callback - runs daily via WorkManager
-@pragma('vm:entry-point')
-void callbackDispatcher() {
-  Workmanager().executeTask((task, inputData) async {
-    WidgetsFlutterBinding.ensureInitialized();
-
-    debugPrint('═══════════════════════════════════════════════════════');
-    debugPrint('🔄 Background wallpaper update started');
-    debugPrint('📋 Task: $task');
-    debugPrint('═══════════════════════════════════════════════════════');
-
-    try {
-      await AppPreferences.init();
-      debugPrint('✅ Preferences initialized');
-
-      final target = AppPreferences.getWallpaperTarget();
-      debugPrint('🎯 Wallpaper target: $target');
-
-      final success = await WallpaperService.refreshAndSetWallpaper(
-        target: target,
-      );
-
-      if (success) {
-        debugPrint('✅ Background wallpaper update completed successfully');
-        return Future.value(true);
-      } else {
-        debugPrint('⚠️ Wallpaper update skipped or failed');
-        return Future.value(true);
-      }
-    } catch (e, stackTrace) {
-      debugPrint('❌ Background wallpaper update failed: $e');
-      debugPrint('📍 Stack trace: $stackTrace');
-      return Future.value(false);
-    }
-  });
-}
+import 'services/storage_service.dart';
+import 'services/background_service.dart';
+import 'services/utils.dart';
+import 'ui/theme.dart';
+import 'ui/onboarding_page.dart';
+import 'ui/setup_page.dart';
+import 'ui/navigation_hub.dart';
 
 void main() async {
+  // Ensure Flutter is initialized
   WidgetsFlutterBinding.ensureInitialized();
 
-  debugPrint('🚀 App starting...');
+  // Configure system UI
+  await _configureSystemUI();
 
-  // Initialize preferences first
-  await AppPreferences.init();
-  debugPrint('✅ Preferences initialized');
+  // Initialize services
+  await _initializeServices();
 
-  // Initialize WorkManager
-  await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
-  debugPrint('✅ WorkManager initialized');
+  // Initialize & Schedule Background Service
+  await BackgroundService.init();
+  await BackgroundService.registerPeriodicTask();
 
-  // Register periodic background task
-  await Workmanager().registerPeriodicTask(
-    AppConstants.wallpaperTaskName,
-    AppConstants.wallpaperTaskTag,
-    frequency: AppConstants.updateInterval,
-    existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
-    constraints: Constraints(
-      networkType: NetworkType.connected,
-      requiresBatteryNotLow: true,
-      requiresStorageNotLow: true,
-    ),
-    backoffPolicy: BackoffPolicy.exponential,
-    backoffPolicyDelay: const Duration(minutes: 15),
-  );
+  // Run app
+  runApp(const MyApp());
+}
 
-  if (AppConstants.updateInterval.inMinutes < 60) {
-    debugPrint(
-      '✅ WorkManager task registered (interval: ${AppConstants.updateInterval.inMinutes} minutes)',
+// ══════════════════════════════════════════════════════════════════════════
+// SYSTEM CONFIGURATION
+// ══════════════════════════════════════════════════════════════════════════
+
+Future<void> _configureSystemUI() async {
+  try {
+    // Lock to portrait orientation
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+
+    // Set system UI overlays for light theme (Calm & Focus)
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
     );
-  } else {
-    debugPrint(
-      '✅ WorkManager task registered (interval: ${AppConstants.updateInterval.inHours} hours)',
-    );
-  }
 
-  // Set status bar style
-  _setSystemUI();
-
-  runApp(MyApp(key: appKey));
-}
-
-/// Configure system UI
-void _setSystemUI() {
-  final isDarkMode = AppPreferences.getDarkMode();
-
-  SystemChrome.setSystemUIOverlayStyle(
-    SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: isDarkMode ? Brightness.light : Brightness.dark,
-      systemNavigationBarColor: isDarkMode
-          ? const Color(0xFF0D1117)
-          : Colors.white,
-      systemNavigationBarIconBrightness: isDarkMode
-          ? Brightness.light
-          : Brightness.dark,
-    ),
-  );
-}
-
-class MyApp extends StatefulWidget {
-  const MyApp({Key? key}) : super(key: key);
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-
-  static void restartApp(BuildContext context) {
-    appKey.currentState?.restartApp();
+    if (kDebugMode) debugPrint('✅ System UI configured');
+  } catch (e) {
+    if (kDebugMode) debugPrint('⚠️ System UI configuration failed: $e');
   }
 }
 
-class _MyAppState extends State<MyApp> {
-  Key _appKey = UniqueKey();
+// ══════════════════════════════════════════════════════════════════════════
+// SERVICE INITIALIZATION
+// ══════════════════════════════════════════════════════════════════════════
 
-  void restartApp() {
-    setState(() {
-      _appKey = UniqueKey();
-      _updateSystemUI();
-    });
-  }
+Future<void> _initializeServices() async {
+  try {
+    // Initialize storage service (critical - must complete)
+    await StorageService.init();
 
-  void _updateSystemUI() {
-    _setSystemUI();
+    if (kDebugMode) debugPrint('✅ All services initialized');
+  } catch (e) {
+    if (kDebugMode) debugPrint('❌ Service initialization failed: $e');
+    // App can still run with default values
   }
+}
 
-  @override
-  void initState() {
-    super.initState();
-    _updateSystemUI();
-  }
+// ══════════════════════════════════════════════════════════════════════════
+// APP ROOT
+// ══════════════════════════════════════════════════════════════════════════
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = AppPreferences.getDarkMode();
+    return MaterialApp(
+      title: 'GitHub Wallpaper',
+      debugShowCheckedModeBanner: false,
 
-    return KeyedSubtree(
-      key: _appKey,
-      child: MaterialApp(
-        title: 'GitHub Wallpaper',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
-        home: const AppInitializer(), // ✅ NEW: Auto-detect device first
-      ),
+      // Universal theme - Calm & Focus premium light
+      theme: AppTheme.theme,
+
+      // Initial route
+      home: const AppInitializer(),
     );
   }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// 🚀 APP INITIALIZER - Detects device then navigates
+// ROUTE DETERMINER - Decides which page to show first
 // ══════════════════════════════════════════════════════════════════════════
 
 class AppInitializer extends StatefulWidget {
-  const AppInitializer({Key? key}) : super(key: key);
+  const AppInitializer({super.key});
 
   @override
   State<AppInitializer> createState() => _AppInitializerState();
@@ -174,95 +116,125 @@ class _AppInitializerState extends State<AppInitializer> {
   @override
   void initState() {
     super.initState();
-    _initialize();
+    _determineInitialRoute();
   }
 
-  Future<void> _initialize() async {
-    // Wait for first frame to get accurate screen dimensions
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Auto-detect device dimensions
-      AppConstants.initializeFromContext(context);
+  Future<void> _determineInitialRoute() async {
+    // Small delay to show splash screen
+    await Future.delayed(const Duration(milliseconds: 500));
 
-      // Small delay to show splash
-      await Future.delayed(const Duration(milliseconds: 500));
+    if (!mounted) return;
 
-      // Navigate to appropriate screen
-      if (!mounted) return;
-      _navigateToHome();
-    });
-  }
+    // Initialize wallpaper dimensions from context
+    AppConfig.initializeFromContext(context);
 
-  void _navigateToHome() {
-    final username = AppPreferences.getUsername();
-    final cachedData = AppPreferences.getCachedData();
+    // Determine which page to show
+    Widget nextPage;
 
-    Widget destination;
+    // Check onboarding status
+    final isOnboardingComplete = StorageService.isOnboardingComplete();
 
-    if (username != null && username.isNotEmpty && cachedData != null) {
-      destination = const MainNavigation();
+    if (!isOnboardingComplete) {
+      // First launch - show onboarding
+      nextPage = const OnboardingPage();
+      if (kDebugMode) debugPrint('🎯 Route: Onboarding (first launch)');
     } else {
-      destination = const OnboardingScreen();
+      // Check if user has credentials
+      final hasToken = await StorageService.hasToken();
+
+      if (!mounted) return;
+
+      final username = StorageService.getUsername();
+
+      if (hasToken && username != null) {
+        // User is logged in - go to navigation hub
+        nextPage = const NavigationHub();
+        if (kDebugMode) debugPrint('🎯 Route: NavigationHub (logged in as @$username)');
+      } else {
+        // Credentials missing - go to setup
+        nextPage = const SetupPage();
+        if (kDebugMode) debugPrint('🎯 Route: Setup (no credentials)');
+      }
     }
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => destination),
+    // Navigate with fade transition
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => nextPage,
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 300),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = AppPreferences.getDarkMode();
+    // Splash/loading screen while determining route
+    final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: isDarkMode ? const Color(0xFF0D1117) : Colors.white,
+      // Match Calm & Focus background
+      backgroundColor: AppTheme.bg,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // App Icon
+            // App logo with calm/focus blue gradient
             Container(
-              width: 80,
-              height: 80,
+              width: 120,
+              height: 120,
               decoration: BoxDecoration(
-                color: context.primaryColor.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(20),
+                gradient: AppTheme.accentBlue,
+                borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.shadowColor.withValues(alpha: 0.18),
+                    blurRadius: 24,
+                    offset: const Offset(0, 12),
+                  ),
+                ],
               ),
-              child: Icon(
-                Icons.hub_outlined,
-                size: 48,
-                color: context.primaryColor,
+              child: const Icon(
+                Icons.code,
+                size: 64,
+                color: Colors.white,
               ),
             ),
 
-            SizedBox(height: AppTheme.spacing24),
+            const SizedBox(height: 32),
 
-            // App Name
+            // App name
             Text(
               'GitHub Wallpaper',
-              style: context.textTheme.headlineSmall?.copyWith(
+              style: theme.textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
               ),
             ),
 
-            SizedBox(height: AppTheme.spacing8),
+            const SizedBox(height: 8),
+
+            // Subtitle
+            Text(
+              'Your coding journey, visualized',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: AppTheme.textSecondary,
+              ),
+            ),
+
+            const SizedBox(height: 48),
 
             // Loading indicator
-            SizedBox(
-              width: 120,
-              child: LinearProgressIndicator(
-                backgroundColor: context.borderColor,
-                valueColor: AlwaysStoppedAnimation<Color>(context.primaryColor),
-              ),
-            ),
-
-            SizedBox(height: AppTheme.spacing12),
-
-            // Status text
-            Text(
-              'Initializing...',
-              style: context.textTheme.bodySmall?.copyWith(
-                color: context.theme.hintColor,
+            const SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  AppTheme.primaryBlue,
+                ),
               ),
             ),
           ],

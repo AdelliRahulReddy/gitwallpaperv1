@@ -17,11 +17,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.rahulreddy.githubwallpaper"
-    
-    // ✅ CRITICAL: Plugins like path_provider require compileSdk 36
-    // This allows the app to BUILD. It does not force users to have Android 16.
     compileSdk = 36 
-    
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -35,13 +31,8 @@ android {
 
     defaultConfig {
         applicationId = "com.rahulreddy.githubwallpaper"
-        minSdk = 24 // Android 7.0
-        
-        // ✅ PRODUCTION: Keeps the app stable on Android 15 (Level 35)
-        // Satisfies Google Play Store requirement.
-        targetSdk = 35 
-        
-        // ✅ FIXED: flutter.versionCode is likely an Int?, so we default to integer 1
+        minSdk = 24
+        targetSdk = 35
         versionCode = flutter.versionCode ?: 1
         versionName = flutter.versionName
     }
@@ -59,9 +50,11 @@ android {
 
     buildTypes {
         release {
+            // ✅ Production settings for Play Store
             isMinifyEnabled = true
             isShrinkResources = true
             
+            // ProGuard rules for R8 optimizer
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -69,6 +62,8 @@ android {
             
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
             }
         }
     }

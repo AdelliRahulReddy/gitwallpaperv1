@@ -26,34 +26,74 @@
 -keep class com.rahulreddy.githubwallpaper.MainActivity { *; }
 
 # ──────────────────────────────────────────────────────────────────────────
-# 3. WORKMANAGER (CRITICAL FOR BACKGROUND TASKS)
+# 3. ✅ PLAY CORE (FIX FOR MISSING CLASSES ERROR)
+# ──────────────────────────────────────────────────────────────────────────
+
+# Play Core library (used by Flutter internally)
+-keep class com.google.android.play.core.** { *; }
+-keep interface com.google.android.play.core.** { *; }
+-dontwarn com.google.android.play.core.**
+
+# Play Core split install
+-keep class com.google.android.play.core.splitcompat.** { *; }
+-keep class com.google.android.play.core.splitinstall.** { *; }
+-keep class com.google.android.play.core.tasks.** { *; }
+
+# ──────────────────────────────────────────────────────────────────────────
+# 4. WORKMANAGER (CRITICAL FOR BACKGROUND TASKS)
 # ──────────────────────────────────────────────────────────────────────────
 
 # Core WorkManager API
 -keep class androidx.work.** { *; }
+-keep interface androidx.work.** { *; }
 
 # Keep Worker constructors
 -keepclassmembers class * extends androidx.work.Worker {
     public <init>(android.content.Context, androidx.work.WorkerParameters);
 }
 
+# Keep ListenableWorker
+-keepclassmembers class * extends androidx.work.ListenableWorker {
+    public <init>(android.content.Context, androidx.work.WorkerParameters);
+}
+
 # ──────────────────────────────────────────────────────────────────────────
-# 4. ANDROID SYSTEM APIs
+# 5. ANDROID SYSTEM APIs
 # ──────────────────────────────────────────────────────────────────────────
 
 # Wallpaper API
 -keep class android.app.WallpaperManager { *; }
 
+# AndroidX Core
+-keep class androidx.core.** { *; }
+-dontwarn androidx.**
+
 # ──────────────────────────────────────────────────────────────────────────
-# 5. HTTP / NETWORKING
+# 6. HTTP / NETWORKING
 # ──────────────────────────────────────────────────────────────────────────
 
 # OkHttp / Okio (used internally by http package)
 -dontwarn okhttp3.**
 -dontwarn okio.**
+-keep class okhttp3.** { *; }
+-keep interface okhttp3.** { *; }
 
 # ──────────────────────────────────────────────────────────────────────────
-# 6. PARCELABLE / SERIALIZABLE SAFETY
+# 7. KOTLIN (If using Kotlin code)
+# ──────────────────────────────────────────────────────────────────────────
+
+-keep class kotlin.** { *; }
+-keep class kotlin.Metadata { *; }
+-dontwarn kotlin.**
+-keepclassmembers class **$WhenMappings {
+    <fields>;
+}
+-keepclassmembers class kotlin.Metadata {
+    public <methods>;
+}
+
+# ──────────────────────────────────────────────────────────────────────────
+# 8. PARCELABLE / SERIALIZABLE SAFETY
 # ──────────────────────────────────────────────────────────────────────────
 
 # Parcelable
@@ -64,10 +104,25 @@
 # Serializable
 -keepclassmembers class * implements java.io.Serializable {
     static final long serialVersionUID;
+    private static final java.io.ObjectStreamField[] serialPersistentFields;
+    private void writeObject(java.io.ObjectOutputStream);
+    private void readObject(java.io.ObjectInputStream);
+    java.lang.Object writeReplace();
+    java.lang.Object readResolve();
 }
 
 # ──────────────────────────────────────────────────────────────────────────
-# 7. LOGGING (RELEASE OPTIMIZATION)
+# 9. REFLECTION SAFETY
+# ──────────────────────────────────────────────────────────────────────────
+
+# Keep attributes for reflection
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepattributes EnclosingMethod
+-keepattributes InnerClasses
+
+# ──────────────────────────────────────────────────────────────────────────
+# 10. LOGGING (RELEASE OPTIMIZATION)
 # ──────────────────────────────────────────────────────────────────────────
 
 # Strip verbose/debug/info logs
@@ -84,9 +139,38 @@
 }
 
 # ──────────────────────────────────────────────────────────────────────────
-# 8. CRASH REPORTING SUPPORT
+# 11. CRASH REPORTING SUPPORT
 # ──────────────────────────────────────────────────────────────────────────
 
 # Preserve line numbers for Play Console stack traces
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# ──────────────────────────────────────────────────────────────────────────
+# 12. ENUM SAFETY
+# ──────────────────────────────────────────────────────────────────────────
+
+# Keep enum classes
+-keepclassmembers enum * {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+}
+
+# ──────────────────────────────────────────────────────────────────────────
+# 13. MISCELLANEOUS
+# ──────────────────────────────────────────────────────────────────────────
+
+# Keep BuildConfig
+-keep class **.BuildConfig { *; }
+
+# Keep R class
+-keepclassmembers class **.R$* {
+    public static <fields>;
+}
+
+# Suppress warnings
+-dontwarn com.google.android.play.**
+-dontwarn javax.annotation.**
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**

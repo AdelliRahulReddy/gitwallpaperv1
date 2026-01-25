@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# 🔐 SENSITIVE FILES - Never commit these!
+android/key.properties
+android/local.properties
+*.jks
+*.keystore
+upload-keystore.jks
