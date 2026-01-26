@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import '../services/storage_service.dart';
 import '../services/wallpaper_service.dart';
@@ -194,44 +195,41 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text(AppStrings.settingsTitle)),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppTheme.spacing16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Account section
-            _buildSectionHeader(AppStrings.sectionAccount, Icons.account_circle),
-            _buildAccountSection(),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppTheme.spacing16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Account section
+          _buildSectionHeader(AppStrings.sectionAccount, Icons.account_circle),
+          _buildAccountSection(),
 
-            const SizedBox(height: AppTheme.spacing24),
+          const SizedBox(height: AppTheme.spacing24),
 
-            // Preferences section
-            _buildSectionHeader(AppStrings.sectionPreferences, Icons.tune),
-            _buildPreferencesSection(),
+          // Preferences section
+          _buildSectionHeader(AppStrings.sectionPreferences, Icons.tune),
+          _buildPreferencesSection(),
 
-            const SizedBox(height: AppTheme.spacing24),
+          const SizedBox(height: AppTheme.spacing24),
 
-            // Data Management section
-            _buildSectionHeader(AppStrings.sectionData, Icons.storage),
-            _buildDataSection(),
+          // Data Management section
+          _buildSectionHeader(AppStrings.sectionData, Icons.storage),
+          _buildDataSection(),
 
-            const SizedBox(height: AppTheme.spacing24),
+          const SizedBox(height: AppTheme.spacing24),
 
-            // Help & Support section
-            _buildSectionHeader(AppStrings.sectionHelp, Icons.help_outline),
-            _buildHelpSection(),
+          // Help & Support section
+          _buildSectionHeader(AppStrings.sectionHelp, Icons.help_outline),
+          _buildHelpSection(),
 
-            const SizedBox(height: AppTheme.spacing24),
+          const SizedBox(height: AppTheme.spacing24),
 
-            // About section
-            _buildSectionHeader(AppStrings.sectionAbout, Icons.info_outline),
-            _buildAboutSection(),
+          // About section
+          _buildSectionHeader(AppStrings.sectionAbout, Icons.info_outline),
+          _buildAboutSection(),
 
-            const SizedBox(height: AppTheme.spacing16),
-          ],
-        ),
+          const SizedBox(height: 120), // Bottom padding for navbar
+        ],
       ),
     );
   }
@@ -300,6 +298,17 @@ class _SettingsPageState extends State<SettingsPage> {
             onChanged: (value) async {
               setState(() => _autoUpdate = value);
               await StorageService.setAutoUpdate(value);
+
+              // Manage FCM Subscription
+              try {
+                if (value) {
+                  await FirebaseMessaging.instance.subscribeToTopic('daily-updates');
+                } else {
+                  await FirebaseMessaging.instance.unsubscribeFromTopic('daily-updates');
+                }
+              } catch (_) {
+                 // Ignore subscription errors (network issues etc)
+              }
 
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(

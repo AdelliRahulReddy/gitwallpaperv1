@@ -10,11 +10,17 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
 import '../services/storage_service.dart';
+import '../services/utils.dart'; // Added for AppStrings
+import '../models/models.dart';     // Added for OnboardingContent
 import 'theme.dart';
-import 'setup_page.dart';
 
 class OnboardingPage extends StatefulWidget {
-  const OnboardingPage({super.key});
+  final void Function(BuildContext context)? onComplete;
+  
+  const OnboardingPage({
+    super.key, 
+    this.onComplete,
+  });
 
   @override
   State<OnboardingPage> createState() => _OnboardingPageState();
@@ -25,38 +31,36 @@ class _OnboardingPageState extends State<OnboardingPage> {
   int _currentPage = 0;
 
   // Onboarding content
-  final List<OnboardingContent> _pages = [
+  static const List<OnboardingContent> _pages = [
     OnboardingContent(
       icon: Icons.calendar_today,
-      title: 'GitHub Contributions',
-      description:
-          'Transform your GitHub contribution graph into a beautiful, live wallpaper that updates automatically.',
+      title: AppStrings.onboardingTitle1,
+      description: AppStrings.onboardingDesc1,
       color: AppTheme.brandGreen,
     ),
     OnboardingContent(
       icon: Icons.wallpaper,
-      title: 'Auto-Updating Wallpaper',
-      description:
-          'Your wallpaper updates daily with your latest contributions. Stay motivated to code every day!',
+      title: AppStrings.onboardingTitle2,
+      description: AppStrings.onboardingDesc2,
       color: AppTheme.brandBlue,
     ),
     OnboardingContent(
       icon: Icons.palette,
-      title: 'Fully Customizable',
-      description:
-          'Choose light or dark theme, adjust positioning, add custom quotes, and make it truly yours.',
+      title: AppStrings.onboardingTitle3,
+      description: AppStrings.onboardingDesc3,
       color: AppTheme.brandOrange,
     ),
   ];
-
+  
   @override
   void initState() {
     super.initState();
-    _pageController.addListener(() {
-      setState(() {
-        _currentPage = _pageController.page?.round() ?? 0;
-      });
-    });
+    // Guard against showing if already complete (e.g. if navigated manually)
+    if (StorageService.isOnboardingComplete()) {
+       WidgetsBinding.instance.addPostFrameCallback((_) {
+         widget.onComplete?.call(context);
+       });
+    }
   }
 
   @override
@@ -65,34 +69,30 @@ class _OnboardingPageState extends State<OnboardingPage> {
     super.dispose();
   }
 
-  // Navigate to setup page and mark onboarding complete
-  Future<void> _finishOnboarding() async {
-    await StorageService.setOnboardingComplete(true);
-    if (!mounted) return;
-
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => const SetupPage()));
-  }
-
   // Skip to last page
   void _skipToEnd() {
     _pageController.animateToPage(
       _pages.length - 1,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
+      duration: const Duration(milliseconds: 500), 
+      curve: Curves.easeOutQuart,
     );
   }
 
   // Next page or finish
   void _nextPage() {
     if (_currentPage == _pages.length - 1) {
-      _finishOnboarding();
+      widget.onComplete?.call(context);
     } else {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
+    }
+  }
+
+  void _onPageChanged(int index) {
+    if (_currentPage != index) {
+      setState(() => _currentPage = index);
     }
   }
 
@@ -105,23 +105,32 @@ class _OnboardingPageState extends State<OnboardingPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // Skip button (hidden on last page)
-            if (!isLastPage)
-              Align(
-                alignment: Alignment.topRight,
-                child: TextButton(
-                  onPressed: _skipToEnd,
-                  child: const Text('Skip'),
-                ),
-              ).animate().fadeIn(duration: AppTheme.animationNormal).slideX(begin: 0.3, end: 0),
+            // Skip button (removed from tree when on last page)
+            Align(
+              alignment: Alignment.topRight,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: isLastPage 
+                    ? const SizedBox(height: 48, width: 64) // Placeholder to prevent jump
+                    : TextButton(
+                        key: const ValueKey('skipBtn'),
+                        onPressed: _skipToEnd,
+                        child: const Text(AppStrings.onboardingSkip),
+                      ),
+              ),
+            ),
 
             // Page view
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
                 itemCount: _pages.length,
+                onPageChanged: _onPageChanged,
                 itemBuilder: (context, index) {
-                  return _buildPage(_pages[index], index);
+                  return _OnboardingItem(
+                    content: _pages[index], 
+                    isActive: index == _currentPage,
+                  );
                 },
               ),
             ),
@@ -137,8 +146,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     count: _pages.length,
                     effect: ExpandingDotsEffect(
                       activeDotColor: theme.colorScheme.primary,
-                      dotColor:
-                          theme.colorScheme.primary.withValues(alpha: 0.2),
+                      dotColor:theme.colorScheme.primary.withValues(alpha: 0.2),
                       dotHeight: AppTheme.spacing8,
                       dotWidth: AppTheme.spacing8,
                       spacing: AppTheme.spacing8,
@@ -152,12 +160,15 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _nextPage,
-                      child: Text(isLastPage ? 'Get Started' : 'Next'),
+                      child: Text(
+                        isLastPage 
+                            ? AppStrings.onboardingStart 
+                            : AppStrings.onboardingNext
+                      ),
                     ),
                   )
-                      .animate(key: ValueKey(isLastPage))
-                      .fadeIn(duration: AppTheme.animationFast)
-                      .scale(begin: const Offset(0.9, 0.9)),
+                      .animate(target: isLastPage ? 1 : 0)
+                      .tint(color: AppTheme.primaryBlue.withValues(alpha: 0.1)), 
                 ],
               ),
             ),
@@ -166,8 +177,22 @@ class _OnboardingPageState extends State<OnboardingPage> {
       ),
     );
   }
+}
 
-  Widget _buildPage(OnboardingContent content, int index) {
+// ══════════════════════════════════════════════════════════════════════════
+// ISOLATED PAGE WIDGET (CONST where possible)
+// ══════════════════════════════════════════════════════════════════════════
+class _OnboardingItem extends StatelessWidget {
+  final OnboardingContent content;
+  final bool isActive;
+
+  const _OnboardingItem({
+    required this.content,
+    required this.isActive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(AppTheme.spacing32),
       child: Column(
@@ -183,10 +208,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
             ),
             child: Icon(content.icon, size: AppTheme.iconXL * 1.25, color: content.color),
           )
-              .animate()
+              .animate(target: isActive ? 1 : 0)
               .scale(
-                duration: AppTheme.animationSlow + 100.ms,
-                delay: (100 * index).ms,
+                duration: AppTheme.animationSlow,
                 curve: Curves.easeOutBack,
               )
               .fadeIn(),
@@ -201,8 +225,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 ),
             textAlign: TextAlign.center,
           )
-              .animate()
-              .fadeIn(delay: (200 + 100 * index).ms)
+              .animate(target: isActive ? 1 : 0)
+              .fadeIn(delay: 100.ms)
               .slideY(begin: 0.3, end: 0),
 
           const SizedBox(height: AppTheme.spacing16),
@@ -216,29 +240,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 ),
             textAlign: TextAlign.center,
           )
-              .animate()
-              .fadeIn(delay: (300 + 100 * index).ms)
+              .animate(target: isActive ? 1 : 0)
+              .fadeIn(delay: 200.ms)
               .slideY(begin: 0.3, end: 0),
         ],
       ),
     );
   }
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// ONBOARDING CONTENT MODEL
-// ══════════════════════════════════════════════════════════════════════════
-
-class OnboardingContent {
-  final IconData icon;
-  final String title;
-  final String description;
-  final Color color;
-
-  OnboardingContent({
-    required this.icon,
-    required this.title,
-    required this.description,
-    required this.color,
-  });
 }

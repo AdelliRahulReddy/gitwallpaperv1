@@ -50,3 +50,20 @@ android/local.properties
 *.jks
 *.keystore
 upload-keystore.jks
+
+# Firebase Configuration (Optional but recommended for public repos)
+android/app/google-services.json
+lib/firebase_options.dart
+
+# Build & Temp
+.gradle/
+.kotlin/
+android/.gradle/
+android/.kotlin/
+**/node_modules/
+
+# Logs & Tools
+repomix*
+analysis*.txt
+audit.txt
+*.log

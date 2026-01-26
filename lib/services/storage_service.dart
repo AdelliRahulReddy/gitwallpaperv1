@@ -126,13 +126,12 @@ class StorageService {
       throw ArgumentError('Token cannot be empty');
     }
 
-    // Validate token format
+    // Validate token format - ENFORCE strict validation
     if (!trimmed.startsWith('ghp_') && !trimmed.startsWith('github_pat_')) {
-      if (kDebugMode) {
-        debugPrint(
-          '⚠️ StorageService: Token format unexpected (not ghp_ or github_pat_)',
-        );
-      }
+      throw ArgumentError(
+        'Invalid GitHub token format. Personal Access Tokens must start with "ghp_" or "github_pat_". '
+        'Please generate a new token at https://github.com/settings/tokens',
+      );
     }
 
     try {

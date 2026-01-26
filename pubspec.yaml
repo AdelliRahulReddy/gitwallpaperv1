@@ -29,11 +29,6 @@ dependencies:
   path_provider: ^2.1.5                # Local file paths
 
   # ══════════════════════════════════════════════════════════════════════════
-  # BACKGROUND TASKS
-  # ══════════════════════════════════════════════════════════════════════════
-  workmanager:  ^0.9.0+3                  # Daily wallpaper updates
-
-  # ══════════════════════════════════════════════════════════════════════════
   # WALLPAPER ENGINE
   # ══════════════════════════════════════════════════════════════════════════
   wallpaper_manager_plus: ^2.0.3       # Set wallpaper (lock/home/both)
@@ -56,6 +51,9 @@ dependencies:
   # MATERIAL DESIGN
   # ══════════════════════════════════════════════════════════════════════════
   cupertino_icons: ^1.0.8
+  firebase_core: ^4.4.0
+  firebase_messaging: ^16.1.1
+  firebase_app_check: ^0.4.1+4
 
 dev_dependencies:
   flutter_test:

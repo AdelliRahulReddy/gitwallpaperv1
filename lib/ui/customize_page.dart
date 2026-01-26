@@ -194,72 +194,44 @@ class _CustomizePageState extends State<CustomizePage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     if (_data == null) {
-      return Scaffold(
-          appBar: AppBar(title: const Text(AppStrings.customizeTitle)),
-        body: EmptyState(
-          icon: Icons.palette_outlined,
-          title: AppStrings.noDataTitle,
-          message: AppStrings.noDataMsg,
-          actionLabel: AppStrings.goBack,
-          onAction: () => Navigator.of(context).pop(),
-        ),
+      return EmptyState(
+        icon: Icons.palette_outlined,
+        title: AppStrings.noDataTitle,
+        message: AppStrings.noDataMsg,
+        actionLabel: AppStrings.goBack,
+        onAction: () => Navigator.of(context).pop(),
       );
     }
 
-    // Dynamic preview height based on screen size, but ensuring it doesn't take up too much vertical space
-    // on smaller screens. We use a scrollable layout now so it's less critical.
     final previewHeight = MediaQuery.of(context).size.height * 0.45;
 
-    return Scaffold(
-      resizeToAvoidBottomInset: true, // Allow resize for keyboard
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: Text(
-          AppStrings.customizeTitle,
-          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        // Preview Area
+        SizedBox(
+          height: previewHeight + AppTheme.spacing24,
+          child: _buildPreview(),
         ),
-        actions: [
-          IconButton(
-            onPressed: _resetToDefaults,
-            icon: const Icon(Icons.restore, color: AppTheme.textPrimary),
-            tooltip: 'Reset',
-          ),
-          const SizedBox(width: AppTheme.spacing8),
-        ],
-      ),
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.mainBgGradient),
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            // Preview Area
-            SizedBox(
-              height: previewHeight + MediaQuery.of(context).padding.top + kToolbarHeight,
-              child: _buildPreview(),
-            ),
 
-            // Controls
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(AppTheme.radiusXL)),
-              ),
-              padding: const EdgeInsets.fromLTRB(AppTheme.spacing16, AppTheme.spacing24, AppTheme.spacing16, AppTheme.spacing24),
-              child: _buildControlPanel(),
-            ),
-            
-            // Apply Button (Scrolls with content)
-            Padding(
-              padding: const EdgeInsets.all(AppTheme.spacing16),
-              child: _buildApplyButton(),
-            ),
-            SizedBox(height: MediaQuery.of(context).viewInsets.bottom), // Extra padding for safety
-          ],
+        // Controls
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.2),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(AppTheme.radiusXL)),
+          ),
+          padding: const EdgeInsets.fromLTRB(AppTheme.spacing16, AppTheme.spacing24, AppTheme.spacing16, AppTheme.spacing24),
+          child: _buildControlPanel(),
         ),
-      ),
+        
+        // Apply Button
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacing16, vertical: AppTheme.spacing24),
+          child: _buildApplyButton(),
+        ),
+        const SizedBox(height: 120), // Space for bottom bar
+      ],
     );
   }
 

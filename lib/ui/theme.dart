@@ -403,6 +403,29 @@ class AppTheme {
         overlayColor: primaryBlue.withValues(alpha: 0.2),
         valueIndicatorColor: primaryBlue,
       ),
+
+      // Navigation Bar – modern Material 3, distinct from background
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: Colors.white.withValues(alpha: 0.9),
+        indicatorColor: primaryBlue.withValues(alpha: 0.1),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return textTheme.labelMedium?.copyWith(
+              color: primaryBlue,
+              fontWeight: FontWeight.bold,
+            );
+          }
+          return textTheme.labelMedium?.copyWith(color: textSecondary);
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const IconThemeData(color: primaryBlue, size: 26);
+          }
+          return const IconThemeData(color: textSecondary, size: 24);
+        }),
+        elevation: 0,
+        height: 72,
+      ),
     );
   }
 }

@@ -102,8 +102,10 @@ class _HomePageState extends State<HomePage> {
         return;
       }
 
-      final service = GitHubService(token: token);
-      final data = await service.fetchContributions(username);
+      final data = await GitHubService.fetchContributions(
+        username: username,
+        token: token,
+      );
 
       await StorageService.setCachedData(data);
       await StorageService.setLastUpdate(DateTime.now());
@@ -213,52 +215,28 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: Text(
-          'GitHub Wallpaper',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: _isSyncing ? null : _syncData,
-            icon: _isSyncing
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh, color: AppTheme.textPrimary),
-            tooltip: AppStrings.startSync,
-          ),
-          const SizedBox(width: AppTheme.spacing8),
+    return RefreshIndicator(
+      onRefresh: _syncData,
+      color: AppTheme.primaryBlue,
+      child: Stack(
+        children: [
+          _buildBody(),
+          if (_data != null)
+            Positioned(
+              bottom: 110, // Higher up to avoid being covered by navbar
+              right: 20,
+              child: FloatingActionButton.extended(
+                onPressed: _updateWallpaper,
+                backgroundColor: AppTheme.primaryBlue,
+                icon: const Icon(Icons.wallpaper, color: Colors.white),
+                label: const Text(AppStrings.setWallpaper,
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold)),
+                elevation: 8,
+              ).animate().fadeIn(delay: 400.ms).scale(curve: Curves.easeOutBack),
+            ),
         ],
       ),
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.mainBgGradient),
-        child: RefreshIndicator(
-          onRefresh: _syncData,
-          color: AppTheme.primaryBlue,
-          child: _buildBody(),
-        ),
-      ),
-      floatingActionButton: _data != null
-          ? FloatingActionButton.extended(
-              onPressed: _updateWallpaper,
-              backgroundColor: AppTheme.primaryBlue,
-              icon: const Icon(Icons.wallpaper, color: Colors.white),
-              label: const Text(AppStrings.setWallpaper,
-                  style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold)),
-              elevation: 8,
-            ).animate().fadeIn(delay: 400.ms).scale(curve: Curves.easeOutBack)
-          : null,
     );
   }
 

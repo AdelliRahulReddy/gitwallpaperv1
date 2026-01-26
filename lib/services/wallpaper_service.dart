@@ -133,9 +133,16 @@ class WallpaperService {
       final textureWidth = width;
       final textureHeight = height;
       
-      if (textureWidth > 4096 || textureHeight > 8192) { // 4K+ Texture limit check
+      // OOM Guard: Limit total pixel count to ~16.7MP (typical high-end texture limit)
+      // This prevents OutOfMemory errors on ultra-high-res devices.
+      const double maxTotalPixels = 16777216; // 4096 * 4096
+      final totalPixels = textureWidth * textureHeight;
+      
+      if (totalPixels > maxTotalPixels) {
+        if (kDebugMode) debugPrint('⚠️ OOM Guard Triggered: ${totalPixels.toInt()} pixels');
         throw WallpaperException(
-          'Wallpaper resolution too high (${textureWidth.toInt()}x${textureHeight.toInt()}). Reduce device resolution or scale.',
+          'Device resolution is too high for wallpaper generation (${textureWidth.toInt()}x${textureHeight.toInt()}). '
+          'Please reduce your screen resolution or pixel density in device settings.',
         );
       }
 

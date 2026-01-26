@@ -94,8 +94,10 @@ class _SetupPageState extends State<SetupPage> {
       final token = _tokenController.text.trim();
 
       // Test connection by fetching contributions
-      final service = GitHubService(token: token);
-      final data = await service.fetchContributions(username);
+      final data = await GitHubService.fetchContributions(
+        username: username,
+        token: token,
+      );
 
       // Success - save credentials
       await StorageService.setUsername(username);

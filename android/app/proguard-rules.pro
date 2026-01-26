@@ -1,6 +1,6 @@
 # ============================================================================
 # GitHub Wallpaper - Production ProGuard Rules
-# Focus: Stability, WorkManager safety, Platform Channels
+# Focus: Stability, FCM, Platform Channels
 # Compatible with Flutter 3.38.x + R8
 # ============================================================================
 
@@ -40,25 +40,7 @@
 -keep class com.google.android.play.core.tasks.** { *; }
 
 # ──────────────────────────────────────────────────────────────────────────
-# 4. WORKMANAGER (CRITICAL FOR BACKGROUND TASKS)
-# ──────────────────────────────────────────────────────────────────────────
-
-# Core WorkManager API
--keep class androidx.work.** { *; }
--keep interface androidx.work.** { *; }
-
-# Keep Worker constructors
--keepclassmembers class * extends androidx.work.Worker {
-    public <init>(android.content.Context, androidx.work.WorkerParameters);
-}
-
-# Keep ListenableWorker
--keepclassmembers class * extends androidx.work.ListenableWorker {
-    public <init>(android.content.Context, androidx.work.WorkerParameters);
-}
-
-# ──────────────────────────────────────────────────────────────────────────
-# 5. ANDROID SYSTEM APIs
+# 4. ANDROID SYSTEM APIs
 # ──────────────────────────────────────────────────────────────────────────
 
 # Wallpaper API
@@ -77,6 +59,21 @@
 -dontwarn okio.**
 -keep class okhttp3.** { *; }
 -keep interface okhttp3.** { *; }
+
+# ──────────────────────────────────────────────────────────────────────────
+# 5. FIREBASE CLOUD MESSAGING (FCM)
+# ──────────────────────────────────────────────────────────────────────────
+
+# Keep FCM and Messaging
+-keep class com.google.firebase.messaging.** { *; }
+-keep class com.google.firebase.iid.** { *; }
+
+# Keep Background Handler entry point
+-keep class * extends com.google.firebase.messaging.FirebaseMessagingService { *; }
+
+# Keep classes for data-only messages to ensure they aren't stripped
+-keep class com.google.firebase.messaging.RemoteMessage { *; }
+-keep class com.google.firebase.messaging.RemoteMessage$Builder { *; }
 
 # ──────────────────────────────────────────────────────────────────────────
 # 7. KOTLIN (If using Kotlin code)
@@ -125,11 +122,10 @@
 # 10. LOGGING (RELEASE OPTIMIZATION)
 # ──────────────────────────────────────────────────────────────────────────
 
-# Strip verbose/debug/info logs
+# Strip verbose/debug logs (Keep Info for breadcrumbs)
 -assumenosideeffects class android.util.Log {
     public static int v(...);
     public static int d(...);
-    public static int i(...);
 }
 
 # Keep warnings & errors

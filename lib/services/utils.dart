@@ -169,7 +169,7 @@ class AppStrings {
   static const String labelSource = 'View Source Code';
   static const String subSource = 'This app is open source';
   static const String labelDev = 'Developer';
-  static const String subDev = 'Made with ❤️ by Your Name';
+  static const String subDev = 'Made with ❤️ by Rahul Reddy';
   static const String labelLicense = 'License';
   static const String subLicense = 'MIT License';
   static const String urlDocs = 'https://github.com/Start-sys-cmd/github_wallpaper#readme';
@@ -183,6 +183,20 @@ class AppStrings {
   static const String legendMore = 'More';
   static const String errorDefault = 'Something went wrong';
   static const String errorAuth = 'Authentication failed';
+
+  // Onboarding
+  static const String onboardingSkip = 'Skip';
+  static const String onboardingNext = 'Next';
+  static const String onboardingStart = 'Get Started';
+  
+  static const String onboardingTitle1 = 'GitHub Contributions';
+  static const String onboardingDesc1 = 'Transform your GitHub contribution graph into a beautiful, live wallpaper that updates automatically.';
+  
+  static const String onboardingTitle2 = 'Auto-Updating Wallpaper';
+  static const String onboardingDesc2 = 'Your wallpaper updates daily with your latest contributions. Stay motivated to code every day!';
+  
+  static const String onboardingTitle3 = 'Fully Customizable';
+  static const String onboardingDesc3 = 'Choose light or dark theme, adjust positioning, add custom quotes, and make it truly yours.';
 }
 
 class AppLayout {

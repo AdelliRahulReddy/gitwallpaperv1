@@ -5,7 +5,8 @@
 // No business logic - only data representation
 // ══════════════════════════════════════════════════════════════════════════
 
-import 'package:flutter/foundation.dart';
+
+import 'package:flutter/material.dart'; // Added for Color, IconData
 
 // ══════════════════════════════════════════════════════════════════════════
 // CONTRIBUTION DAY - Single day's data
@@ -355,4 +356,22 @@ class WallpaperConfig {
       cornerRadius,
     );
   }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ONBOARDING CONTENT
+// ══════════════════════════════════════════════════════════════════════════
+
+class OnboardingContent {
+  final IconData icon;
+  final String title;
+  final String description;
+  final Color color;
+
+  const OnboardingContent({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.color,
+  });
 }

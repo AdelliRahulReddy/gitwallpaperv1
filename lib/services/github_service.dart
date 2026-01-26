@@ -1,3 +1,5 @@
+
+
 // ══════════════════════════════════════════════════════════════════════════
 // 🌐 GITHUB SERVICE - API Client & Data Processing
 // ══════════════════════════════════════════════════════════════════════════
@@ -15,9 +17,8 @@ import '../models/models.dart';
 import 'utils.dart';
 
 class GitHubService {
-  final String token;
-
-  GitHubService({required this.token});
+  // Shared persistent client for connection pooling
+  static final http.Client _client = http.Client();
 
   // ════════════════════════════════════════════════════════════════════════
   // PUBLIC API - FETCH CONTRIBUTIONS
@@ -25,23 +26,34 @@ class GitHubService {
 
   /// Fetches year-to-date contributions with automatic retry
   ///
+  /// [token]: GitHub Personal Access Token (passed explicitly to avoid long-term storage)
   /// Returns [CachedContributionData] with contribution stats and calendar data
   /// Throws [GitHubAPIException] on failure after all retries
-  Future<CachedContributionData> fetchContributions(
-    String username, {
+  static Future<CachedContributionData> fetchContributions({
+    required String username,
+    required String token,
     int retryCount = 2,
   }) async {
-    // Check internet connectivity first
+    // 0. Username Validation
+    if (!_isValidUsername(username)) {
+      throw GitHubAPIException(
+        'Invalid username format. GitHub usernames can only contain alphanumeric characters and hyphens.',
+        shouldRetry: false,
+      );
+    }
+
+    // 1. Soft Connectivity Check (DNS lookup)
+    // We try to verify connectivity but DO NOT block if it fails,
+    // as corporate/VPN networks might block raw DNS lookups.
     try {
-      final hasConnection = await ConnectivityHelper.hasConnection();
-      if (!hasConnection) {
-        throw GitHubAPIException(
-          'No internet connection. Please check your WiFi or mobile data.',
-        );
+      final result = await InternetAddress.lookup('api.github.com')
+          .timeout(const Duration(seconds: 3));
+      if (result.isEmpty || result[0].rawAddress.isEmpty) {
+        if (kDebugMode) debugPrint('⚠️ DNS lookup empty (potential offline)');
       }
     } catch (e) {
-      // Fallback if connectivity check fails, proceed to try request
-      if (kDebugMode) debugPrint('⚠️ Connectivity check skipped: $e');
+       // Just log and proceed - allow HTTP client to fail normally if offline
+       if (kDebugMode) debugPrint('⚠️ DNS lookup failed (proceeding anyway): $e');
     }
 
     int attempts = 0;
@@ -52,44 +64,58 @@ class GitHubService {
         attempts++;
         if (kDebugMode) {
           debugPrint(
-            '🌐 GitHubService: Fetching @$username (Attempt $attempts/${retryCount + 1})',
+            '🌐 GitHubService: Fetching contributions (Attempt $attempts/${retryCount + 1})',
           );
         }
 
-        final response = await _makeRequest(username);
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final response = await _makeRequest(username, token);
+        
+        // Handle JSON decoding safely
+        Map<String, dynamic> data;
+        try {
+          data = jsonDecode(response.body) as Map<String, dynamic>;
+        } catch (_) {
+           throw const FormatException('Invalid JSON response');
+        }
 
         _validateResponse(response, data, username);
 
-        if (kDebugMode) debugPrint('✅ GitHubService: Success');
+        if (kDebugMode) debugPrint('✅ GitHubService: Contribution data fetched successfully');
         return _parseResponse(data, username);
+      } on GitHubAPIException catch (e) {
+        // Don't retry fatal API errors (Auth, Rate Limit, Validation)
+        if (!e.shouldRetry) rethrow;
+        lastException = e;
       } on SocketException {
         lastException = GitHubAPIException(
           'Connection failed. Please check your internet connection.',
+          shouldRetry: true,
         );
       } on TimeoutException {
         lastException = GitHubAPIException(
           'Request timed out. Please try again.',
+          shouldRetry: true,
         );
-      } on GitHubAPIException {
-        rethrow; // Don't retry auth/permission errors
-      } on FormatException catch (e) {
-        if (kDebugMode) debugPrint('⚠️ GitHubService: Parse error: $e');
-        throw GitHubAPIException('Invalid response from GitHub.'); // Don't retry
+      } on FormatException {
+         lastException = GitHubAPIException(
+           'Invalid response from GitHub servers.',
+           shouldRetry: true,
+         );
       } catch (e) {
-        lastException = GitHubAPIException('Unexpected error: ${e.toString()}');
+        // Unknown errors are treated as fatal unless proven otherwise to avoid loops
+        lastException = GitHubAPIException('Unexpected error: ${e.toString()}', shouldRetry: false);
         if (kDebugMode) debugPrint('❌ GitHubService: Unexpected error: $e');
       }
 
       // Exponential backoff retry
       if (attempts <= retryCount) {
-        final waitSeconds = 2 * attempts;
+        final waitSeconds = 2 * attempts; // 2s, 4s, 6s...
         if (kDebugMode) debugPrint('🔄 GitHubService: Retrying in ${waitSeconds}s...');
         await Future.delayed(Duration(seconds: waitSeconds));
       }
     }
 
-    throw lastException ?? GitHubAPIException('Failed to connect to GitHub');
+    throw lastException ?? GitHubAPIException('Failed to connect to GitHub', shouldRetry: true);
   }
 
   // ════════════════════════════════════════════════════════════════════════
@@ -97,15 +123,14 @@ class GitHubService {
   // ════════════════════════════════════════════════════════════════════════
 
   /// Makes HTTP POST request to GitHub GraphQL API
-  Future<http.Response> _makeRequest(String username) async {
-    final now = DateTime.now();
-    // [FIX] Use DateTime.utc for start of year.
-    // Using DateTime(year, 1, 1) creates a LOCAL time. When converted .toUtc(),
-    // it can shift to the previous year (e.g. UTC+9 00:00 -> UTC 15:00 Prev Day).
+  static Future<http.Response> _makeRequest(String username, String token) async {
+    final now = DateTime.now().toUtc(); // Fix: Force UTC
+    
+    // Calculate start of current year in UTC
     final from = DateTime.utc(now.year, 1, 1).toIso8601String();
-    final to = now.toUtc().toIso8601String();
+    final to = now.toIso8601String();
 
-    return await http
+    return await _client
         .post(
           Uri.parse(AppConfig.githubApiUrl),
           headers: {
@@ -129,8 +154,7 @@ class GitHubService {
   }
 
   /// Builds GraphQL query for year-to-date contribution data
-  /// Uses parameterized variables for security (prevents injection)
-  String _buildQuery() {
+  static String _buildQuery() {
     return '''
     query(\$login: String!, \$from: DateTime!, \$to: DateTime!) {
       user(login: \$login) {
@@ -156,64 +180,89 @@ class GitHubService {
   // ════════════════════════════════════════════════════════════════════════
 
   /// Validates API response and throws appropriate errors
-  void _validateResponse(
+  static void _validateResponse(
     http.Response response,
     Map<String, dynamic> data,
     String username,
   ) {
-    // HTTP errors
+    // 1. Rate Limit Check (Headers)
+    final remaining = response.headers['x-ratelimit-remaining'];
+    if (remaining != null && int.tryParse(remaining) == 0) {
+       final resetTime = response.headers['x-ratelimit-reset'];
+       final resetDate = resetTime != null 
+           ? DateTime.fromMillisecondsSinceEpoch(int.parse(resetTime) * 1000).toLocal()
+           : null;
+       
+       throw GitHubAPIException(
+         'Rate limit exceeded. Try again ${resetDate != null ? "at ${resetDate.hour}:${resetDate.minute}" : "later"}.',
+         shouldRetry: false,
+       );
+    }
+
+    // 2. HTTP Status Check
     if (response.statusCode != 200) {
       _handleHttpError(response);
     }
 
-    // GraphQL errors
+    // 3. GraphQL Error Check (Iterate all)
     if (data['errors'] != null) {
       final errors = data['errors'] as List;
       if (errors.isNotEmpty) {
-        final message = errors[0]['message'] as String? ?? 'Unknown error';
-        throw GitHubAPIException('GitHub API Error: $message');
+        final messages = errors
+            .map((e) => e['message'] as String? ?? 'Unknown error')
+            .join(' | ');
+            
+        if (messages.contains('Could not resolve to a User')) {
+           throw GitHubAPIException('User "$username" not found.', shouldRetry: false);
+        }
+        
+        throw GitHubAPIException('GitHub API: $messages', shouldRetry: false);
       }
     }
 
-    // Empty/invalid data
-    if (data['data'] == null || data['data']['user'] == null) {
+    // 4. Data Structure Check
+    if (data['data'] == null || 
+        data['data']['user'] == null || 
+        data['data']['user']['contributionsCollection'] == null) {
       throw GitHubAPIException(
-        'User "@$username" not found or account is private.',
+        'User "@$username" found but contributions data is missing or private.',
+        shouldRetry: false,
       );
     }
   }
 
   /// Handles HTTP status code errors with user-friendly messages
-  void _handleHttpError(http.Response response) {
+  static void _handleHttpError(http.Response response) {
+    bool shouldRetry = false;
+    String message;
+
     switch (response.statusCode) {
       case 401:
-        throw GitHubAPIException(
-          'Invalid GitHub token. Please update your token in settings.',
-        );
+        message = 'Invalid GitHub token. Please update your token in settings.';
+        shouldRetry = false;
+        break;
       case 403:
-        final reset = response.headers['x-ratelimit-reset'];
-        if (reset != null) {
-          throw GitHubAPIException(
-            'GitHub API rate limit exceeded. Please try again later.',
-          );
-        } else {
-          throw GitHubAPIException(
-            'Access forbidden. Check your token permissions.',
-          );
-        }
+        message = 'Access forbidden. Token may lack permissions or be rate-limited.';
+        shouldRetry = false;
+        break;
       case 404:
-        throw GitHubAPIException(
-          'GitHub API endpoint not found. Please update the app.',
-        );
+        message = 'GitHub endpoint not found.';
+        shouldRetry = false;
+        break;
+      case 422:
+        message = 'Validation failed. Check username and parameters.';
+        shouldRetry = false;
+        break;
       case >= 500:
-        throw GitHubAPIException(
-          'GitHub servers are down (Error ${response.statusCode}). Try again later.',
-        );
+        message = 'GitHub servers are down (Error ${response.statusCode}).';
+        shouldRetry = true; // Retry server errors
+        break;
       default:
-        throw GitHubAPIException(
-          'HTTP Error ${response.statusCode}: ${response.reasonPhrase ?? "Unknown"}',
-        );
+        message = 'HTTP Error ${response.statusCode}: ${response.reasonPhrase}';
+        shouldRetry = true; // Retry unknown transient errors
     }
+    
+    throw GitHubAPIException(message, shouldRetry: shouldRetry);
   }
 
   // ════════════════════════════════════════════════════════════════════════
@@ -221,32 +270,35 @@ class GitHubService {
   // ════════════════════════════════════════════════════════════════════════
 
   /// Parses API response and calculates contribution statistics
-  CachedContributionData _parseResponse(
+  static CachedContributionData _parseResponse(
     Map<String, dynamic> json,
     String username,
   ) {
     try {
-      final collection = json['data']['user']['contributionsCollection'];
-      final calendar =
-          collection['contributionCalendar'] as Map<String, dynamic>;
-      final weeksJson = calendar['weeks'] as List;
+      final collection = json['data']?['user']?['contributionsCollection'];
+      if (collection == null) throw const FormatException('Missing collection data');
+      
+      final calendar = collection['contributionCalendar'] as Map<String, dynamic>?;
+      if (calendar == null) throw const FormatException('Missing calendar data');
 
-      // Get exact total from API (more accurate than manual sum)
+      final weeksJson = calendar['weeks'] as List?;
+      if (weeksJson == null) throw const FormatException('Missing weeks data');
+
       final apiTotalContributions = calendar['totalContributions'] as int? ?? 0;
 
-      // 1. Flatten all days from year-to-date
+      // 1. Flatten all days
       final allDays = _flattenDays(weeksJson);
 
-      // 2. Calculate stats from full year
+      // 2. Calculate stats
       final stats = _calculateStats(allDays);
 
-      // 3. Filter for current month only (for wallpaper display)
+      // 3. Filter for current month
       final now = DateTime.now();
       final currentMonthDays = allDays
           .where((d) => d.date.month == now.month && d.date.year == now.year)
           .toList();
 
-      // 4. Build daily contributions map (day-of-month -> count)
+      // 4. Build daily map
       final dailyContributions = <int, int>{};
       for (var day in currentMonthDays) {
         dailyContributions[day.date.day] = day.contributionCount;
@@ -254,7 +306,7 @@ class GitHubService {
 
       return CachedContributionData(
         username: username,
-        totalContributions: apiTotalContributions, // Use API total
+        totalContributions: apiTotalContributions,
         currentStreak: stats['currentStreak']!,
         longestStreak: stats['longestStreak']!,
         todayCommits: stats['todayCommits']!,
@@ -265,25 +317,23 @@ class GitHubService {
     } catch (e, stack) {
       if (kDebugMode) debugPrint('❌ GitHubService: Parse error: $e\n$stack');
       throw GitHubAPIException(
-        'Failed to process contribution data. Please try again.',
+        'Failed to process contribution data structure.',
+        shouldRetry: false,
       );
     }
   }
 
   /// Flattens weeks structure into a list of contribution days
-  List<ContributionDay> _flattenDays(List weeksJson) {
+  static List<ContributionDay> _flattenDays(List weeksJson) {
     final allDays = <ContributionDay>[];
 
     for (var week in weeksJson) {
-      final daysJson = week['contributionDays'] as List;
+      final daysJson = week['contributionDays'] as List?;
+      if (daysJson == null) continue;
+      
       for (var day in daysJson) {
         try {
-          // [FIX] Force UTC parsing by appending 'T00:00:00Z'.
-          // GitHub returns "YYYY-MM-DD". DateTime.parse() is Local.
-          // This causes bugs during DST transitions (e.g. 23 hour days)
-          // where .inDays difference returns 0 instead of 1.
           final dateStr = "${day['date']}T00:00:00Z";
-
           allDays.add(
             ContributionDay(
               date: DateTime.parse(dateStr),
@@ -291,20 +341,14 @@ class GitHubService {
               contributionLevel: day['contributionLevel'] as String?,
             ),
           );
-        } catch (e) {
-          if (kDebugMode) debugPrint('⚠️ GitHubService: Skipped invalid day: $e');
-          continue; // Skip invalid days
-        }
+        } catch (_) {}
       }
     }
-
     return allDays;
   }
 
-  /// Calculates contribution statistics (streaks, totals, etc.)
-  Map<String, int> _calculateStats(List<ContributionDay> days) {
-    // Note: 'days' are already sorted by _flattenDays logic (GitHub returns chronological)
-    // but sorting again ensures safety.
+  /// Calculates contribution statistics
+  static Map<String, int> _calculateStats(List<ContributionDay> days) {
     days.sort((a, b) => a.date.compareTo(b.date));
 
     int currentStreak = 0;
@@ -314,12 +358,11 @@ class GitHubService {
     int tempStreak = 0;
     DateTime? lastActiveDate;
 
-    // Use UTC for today to match the UTC parsing in _flattenDays
-    final now = DateTime.now();
+    // Use UTC for today
+    final now = DateTime.now().toUtc();
     final today = DateTime.utc(now.year, now.month, now.day);
 
     for (var day in days) {
-      // Check if this is today
       if (DateHelper.isSameDay(day.date, today)) {
         todayCommits = day.contributionCount;
       }
@@ -328,31 +371,23 @@ class GitHubService {
         if (lastActiveDate != null) {
           final daysSince = day.date.difference(lastActiveDate).inDays;
 
-          if (daysSince > 1) {
-            // Streak broken
-            tempStreak = 1;
-          } else if (daysSince == 1) {
-            // Streak continues (consecutive day)
+          if (daysSince == 1) {
             tempStreak++;
+          } else if (daysSince > 1) {
+            if (tempStreak > longestStreak) longestStreak = tempStreak;
+            tempStreak = 1;
           }
-          // if daysSince == 0, it's the same day (duplicate entry?), ignore.
         } else {
-          // First active day found
           tempStreak = 1;
         }
-
         lastActiveDate = day.date;
-
-        if (tempStreak > longestStreak) {
-          longestStreak = tempStreak;
-        }
       }
     }
+    
+    if (tempStreak > longestStreak) longestStreak = tempStreak;
 
-    // Validate current streak (must include today or yesterday)
     if (lastActiveDate != null) {
       final daysSinceLastActive = today.difference(lastActiveDate).inDays;
-      // If last active was today (0) or yesterday (1), streak is alive.
       currentStreak = daysSinceLastActive <= 1 ? tempStreak : 0;
     }
 
@@ -367,10 +402,23 @@ class GitHubService {
   // UTILITY METHODS
   // ════════════════════════════════════════════════════════════════════════
 
-  /// Validates GitHub token format (basic check)
+  /// Validates GitHub token format
   static bool isValidTokenFormat(String token) {
     final trimmed = token.trim();
-    return trimmed.startsWith('ghp_') || trimmed.startsWith('github_pat_');
+    if (trimmed.startsWith('ghp_')) {
+      return RegExp(r'^ghp_[a-zA-Z0-9]{36}$').hasMatch(trimmed);
+    } else if (trimmed.startsWith('github_pat_')) {
+      return RegExp(r'^github_pat_[a-zA-Z0-9_]{50,}$').hasMatch(trimmed);
+    }
+    return false;
+  }
+  
+  /// Validates GitHub username format
+  static bool _isValidUsername(String username) {
+    // GitHub: alphanumeric + hyphen, max 39 chars, no consecutive hyphens, no start/end hyphen
+    // Simplified regex:
+    final RegExp validUsername = RegExp(r'^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$');
+    return validUsername.hasMatch(username);
   }
 
   /// Gets GitHub API base URL
@@ -383,8 +431,9 @@ class GitHubService {
 
 class GitHubAPIException implements Exception {
   final String message;
+  final bool shouldRetry;
 
-  GitHubAPIException(this.message);
+  GitHubAPIException(this.message, {this.shouldRetry = false});
 
   @override
   String toString() => message;

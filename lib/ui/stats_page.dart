@@ -76,8 +76,10 @@ class _StatsPageState extends State<StatsPage> {
         throw Exception('Credentials not found');
       }
 
-      final service = GitHubService(token: token);
-      final data = await service.fetchContributions(username);
+      final data = await GitHubService.fetchContributions(
+        username: username,
+        token: token,
+      );
 
       await StorageService.setCachedData(data);
       await StorageService.setLastUpdate(DateTime.now());
@@ -133,41 +135,10 @@ class _StatsPageState extends State<StatsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: Text(
-          AppStrings.statsTitle,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: _isSyncing ? null : _syncData,
-            icon: _isSyncing
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh, color: AppTheme.textPrimary),
-            tooltip: AppStrings.refresh,
-          ),
-          const SizedBox(width: AppTheme.spacing8),
-        ],
-      ),
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.mainBgGradient),
-        child: RefreshIndicator(
-          onRefresh: _syncData,
-          color: AppTheme.primaryBlue,
-          child: _buildBody(),
-        ),
-      ),
+    return RefreshIndicator(
+      onRefresh: _syncData,
+      color: AppTheme.primaryBlue,
+      child: _buildBody(),
     );
   }
 

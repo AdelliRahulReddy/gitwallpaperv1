@@ -5,12 +5,15 @@
 // Calm & Focus premium light theme - Glass & Depth design system
 // ══════════════════════════════════════════════════════════════════════════
 
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'firebase_options.dart';
 import 'services/storage_service.dart';
-import 'services/background_service.dart';
+import 'services/fcm_service.dart';
 import 'services/utils.dart';
 import 'ui/theme.dart';
 import 'ui/onboarding_page.dart';
@@ -21,15 +24,42 @@ void main() async {
   // Ensure Flutter is initialized
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Initialize Firebase (Required for FCM)
+  try {
+    print('--------- FIREBASE INITIALIZING ---------');
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    print('--------- FIREBASE INITIALIZED SUCCESS ---------');
+  } catch (e) {
+    print('--------- FIREBASE INITIALIZATION FAILED: $e ---------');
+  }
+
   // Configure system UI
   await _configureSystemUI();
 
   // Initialize services
   await _initializeServices();
 
+  // Initialize Firebase App Check
+  try {
+    await FirebaseAppCheck.instance.activate(
+      // ignore: deprecated_member_use
+      androidProvider: AndroidProvider.playIntegrity,
+      // ignore: deprecated_member_use
+      appleProvider: AppleProvider.appAttest,
+    );
+  } catch (e) {
+    if (kDebugMode) debugPrint('⚠️ App Check Init failed: $e');
+  }
+
   // Initialize & Schedule Background Service
-  await BackgroundService.init();
-  await BackgroundService.registerPeriodicTask();
+  // Initialize FCM for silent push background updates
+  try {
+    await FcmService.init();
+  } catch (e) {
+    if (kDebugMode) debugPrint('⚠️ FCM Initialization failed (Check configuration): $e');
+  }
 
   // Run app
   runApp(const MyApp());
@@ -136,7 +166,17 @@ class _AppInitializerState extends State<AppInitializer> {
 
     if (!isOnboardingComplete) {
       // First launch - show onboarding
-      nextPage = const OnboardingPage();
+      nextPage = OnboardingPage(
+        onComplete: (navContext) async {
+          // 1. Mark complete
+          await StorageService.setOnboardingComplete(true);
+          
+          // 2. Navigate to Setup
+          Navigator.of(navContext).pushReplacement(
+             MaterialPageRoute(builder: (_) => const SetupPage()),
+          );
+        }
+      );
       if (kDebugMode) debugPrint('🎯 Route: Onboarding (first launch)');
     } else {
       // Check if user has credentials
