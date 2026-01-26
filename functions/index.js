@@ -23,6 +23,10 @@ exports.triggerDailyUpdate = functions.pubsub
                 type: "daily_refresh",
                 timestamp: new Date().toISOString(),
             },
+            android: {
+                priority: "high",
+                ttl: 3600 * 1000, // 1 hour
+            },
             topic: "daily-updates",
         };
 
