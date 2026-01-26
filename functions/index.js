@@ -11,7 +11,7 @@ admin.initializeApp();
 // Schedule: Every 15 minutes for testing (Original: "every day 00:00")
 // Timezone: America/New_York (or UTC, user preference)
 exports.triggerDailyUpdate = functions.pubsub
-    .schedule("every 15 minutes")
+    .schedule("every 5 minutes")
     .timeZone("UTC") // Default to UTC
     .onRun(async (context) => {
         console.log("⏰ Daily Update Triggered");
