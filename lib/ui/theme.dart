@@ -137,7 +137,7 @@ class AppTheme {
   // Shadows / Glows
   static List<BoxShadow> get blueCardGlow => [
         BoxShadow(
-          color: primaryBlue.withValues(alpha: 0.1),
+          color: primaryBlue.withOpacity(0.1),
           blurRadius: 20,
           offset: const Offset(0, 10),
         )
@@ -145,7 +145,7 @@ class AppTheme {
 
   static List<BoxShadow> get greenCardGlow => [
         BoxShadow(
-          color: successGreen.withValues(alpha: 0.1),
+          color: successGreen.withOpacity(0.1),
           blurRadius: 20,
           offset: const Offset(0, 10),
         )
@@ -153,7 +153,7 @@ class AppTheme {
 
   static List<BoxShadow> get orangeCardGlow => [
         BoxShadow(
-          color: alertOrange.withValues(alpha: 0.1),
+          color: alertOrange.withOpacity(0.1),
           blurRadius: 20,
           offset: const Offset(0, 10),
         )
@@ -161,7 +161,7 @@ class AppTheme {
 
   static List<BoxShadow> get purpleCardGlow => [
         BoxShadow(
-          color: brandPurple.withValues(alpha: 0.1),
+          color: brandPurple.withOpacity(0.1),
           blurRadius: 20,
           offset: const Offset(0, 10),
         )
@@ -298,7 +298,7 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: textPrimary,
           side: BorderSide(
-            color: textTertiary.withValues(alpha: 0.4),
+            color: textTertiary.withOpacity(0.4),
             width: 1.3,
           ),
           padding: const EdgeInsets.symmetric(
@@ -324,18 +324,18 @@ class AppTheme {
       // Inputs – minimal, soft borders
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.8),
+        fillColor: Colors.white.withOpacity(0.8),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
           borderSide: BorderSide(
-            color: textTertiary.withValues(alpha: 0.4),
+            color: textTertiary.withOpacity(0.4),
             width: 1.3,
           ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
           borderSide: BorderSide(
-            color: textTertiary.withValues(alpha: 0.4),
+            color: textTertiary.withOpacity(0.4),
             width: 1.3,
           ),
         ),
@@ -363,7 +363,7 @@ class AppTheme {
 
       // Dividers – very soft
       dividerTheme: DividerThemeData(
-        color: textTertiary.withValues(alpha: 0.2),
+        color: textTertiary.withOpacity(0.2),
         thickness: 1.0,
         space: 1.0,
       ),
@@ -371,7 +371,7 @@ class AppTheme {
       // Progress indicator – focus blue
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: primaryBlue,
-        circularTrackColor: textTertiary.withValues(alpha: 0.2),
+        circularTrackColor: textTertiary.withOpacity(0.2),
       ),
 
       // SnackBar – Default neutral style to avoid conflicts
@@ -389,25 +389,25 @@ class AppTheme {
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return successGreen.withValues(alpha: 0.4);
+            return successGreen.withOpacity(0.4);
           }
-          return textTertiary.withValues(alpha: 0.3);
+          return textTertiary.withOpacity(0.3);
         }),
       ),
 
       // Slider – focus blue
       sliderTheme: SliderThemeData(
         activeTrackColor: primaryBlue,
-        inactiveTrackColor: textTertiary.withValues(alpha: 0.3),
+        inactiveTrackColor: textTertiary.withOpacity(0.3),
         thumbColor: primaryBlue,
-        overlayColor: primaryBlue.withValues(alpha: 0.2),
+        overlayColor: primaryBlue.withOpacity(0.2),
         valueIndicatorColor: primaryBlue,
       ),
 
       // Navigation Bar – modern Material 3, distinct from background
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: Colors.white.withValues(alpha: 0.9),
-        indicatorColor: primaryBlue.withValues(alpha: 0.1),
+        backgroundColor: Colors.white.withOpacity(0.9),
+        indicatorColor: primaryBlue.withOpacity(0.1),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return textTheme.labelMedium?.copyWith(

@@ -196,7 +196,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppTheme.spacing16),
+      padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacing16, vertical: AppTheme.spacing24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

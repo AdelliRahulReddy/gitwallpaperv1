@@ -165,10 +165,8 @@ class _StatsPageState extends State<StatsPage> {
   }
 
   Widget _buildStats() {
-    final topPadding = MediaQuery.of(context).padding.top + kToolbarHeight + AppTheme.spacing16;
-
     return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(AppTheme.spacing16, topPadding, AppTheme.spacing16, AppTheme.spacing32),
+      padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacing16, vertical: AppTheme.spacing24),
       physics: const AlwaysScrollableScrollPhysics(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -219,9 +217,9 @@ class _StatsPageState extends State<StatsPage> {
     return Container(
       padding: const EdgeInsets.all(AppTheme.spacing24),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.4),
+        color: Colors.white.withOpacity(0.4),
         borderRadius: BorderRadius.circular(AppTheme.radiusXL),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
+        border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
       ),
       child: Column(
         children: [
@@ -343,9 +341,9 @@ class _StatsPageState extends State<StatsPage> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.4),
+        color: Colors.white.withOpacity(0.4),
         borderRadius: BorderRadius.circular(AppTheme.radiusXL),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
+        border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
       ),
       padding: const EdgeInsets.all(AppTheme.spacing20),
       child: Column(
@@ -395,9 +393,9 @@ class _StatsPageState extends State<StatsPage> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.4),
+        color: Colors.white.withOpacity(0.4),
         borderRadius: BorderRadius.circular(AppTheme.radiusXL),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
+        border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
       ),
       padding: const EdgeInsets.all(AppTheme.spacing20),
       child: Column(
@@ -486,9 +484,9 @@ class _StatsPageState extends State<StatsPage> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.4),
+        color: Colors.white.withOpacity(0.4),
         borderRadius: BorderRadius.circular(AppTheme.radiusXL),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
+        border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
       ),
       padding: const EdgeInsets.all(AppTheme.spacing20),
       child: Column(

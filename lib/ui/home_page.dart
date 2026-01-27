@@ -223,7 +223,7 @@ class _HomePageState extends State<HomePage> {
           _buildBody(),
           if (_data != null)
             Positioned(
-              bottom: 110, // Higher up to avoid being covered by navbar
+              bottom: 24, 
               right: 20,
               child: FloatingActionButton.extended(
                 onPressed: _updateWallpaper,
@@ -263,19 +263,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildDashboard() {
-    final username = StorageService.getUsername() ?? 'User';
-    final topPadding = MediaQuery.of(context).padding.top +
-        kToolbarHeight +
-        AppTheme.spacing16;
-
     return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(AppTheme.spacing16, topPadding,
-          AppTheme.spacing16, AppTheme.spacing64 + 40),
+      padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacing16, vertical: AppTheme.spacing24),
       physics: const AlwaysScrollableScrollPhysics(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildPremiumHeader(username),
+          _buildPremiumHeader(StorageService.getUsername() ?? 'User'),
           const SizedBox(height: AppTheme.spacing32),
           _buildSectionHeader(AppStrings.dashboardOverview, Icons.dashboard_outlined),
           const SizedBox(height: AppTheme.spacing16),
@@ -297,10 +291,10 @@ class _HomePageState extends State<HomePage> {
     return Container(
       padding: const EdgeInsets.all(AppTheme.spacing24),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.4),
+        color: Colors.white.withOpacity(0.4),
         borderRadius: BorderRadius.circular(AppTheme.radiusXL),
         border:
-            Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
+            Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
       ),
       child: Row(
         children: [
@@ -311,7 +305,7 @@ class _HomePageState extends State<HomePage> {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.primaryBlue.withValues(alpha: 0.3),
+                  color: AppTheme.primaryBlue.withOpacity(0.3),
                   blurRadius: 15,
                   offset: const Offset(0, 5),
                 )
@@ -416,13 +410,13 @@ class _HomePageState extends State<HomePage> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.5),
+        color: Colors.white.withOpacity(0.5),
         borderRadius: BorderRadius.circular(AppTheme.radiusXL),
         border:
-            Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
+            Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.shadowColor.withValues(alpha: 0.05),
+            color: AppTheme.shadowColor.withOpacity(0.05),
             blurRadius: 30,
             offset: const Offset(0, 10),
           )
@@ -492,7 +486,7 @@ class _HomePageState extends State<HomePage> {
       padding: const EdgeInsets.symmetric(
           horizontal: AppTheme.spacing12, vertical: AppTheme.spacing6),
       decoration: BoxDecoration(
-        color: AppTheme.textSecondary.withValues(alpha: 0.05),
+        color: AppTheme.textSecondary.withOpacity(0.05),
         borderRadius: BorderRadius.circular(AppTheme.radiusFull),
       ),
       child: Row(
@@ -515,10 +509,10 @@ class _HomePageState extends State<HomePage> {
   Widget _buildQuickActions() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.4),
+        color: Colors.white.withOpacity(0.4),
         borderRadius: BorderRadius.circular(AppTheme.radiusXL),
         border:
-            Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
+            Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
       ),
       child: Column(
         children: [
@@ -563,7 +557,7 @@ class _HomePageState extends State<HomePage> {
       leading: Container(
         padding: const EdgeInsets.all(AppTheme.spacing12),
         decoration: BoxDecoration(
-          color: iconColor.withValues(alpha: 0.1),
+          color: iconColor.withOpacity(0.1),
           borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
         ),
         child: Icon(icon, color: iconColor, size: 24),

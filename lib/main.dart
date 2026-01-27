@@ -124,6 +124,7 @@ class MyApp extends StatelessWidget {
 
       // Universal theme - Calm & Focus premium light
       theme: AppTheme.theme,
+      themeMode: ThemeMode.light, // Always use light theme for now
 
       // Initial route
       home: const AppInitializer(),
@@ -230,7 +231,7 @@ class _AppInitializerState extends State<AppInitializer> {
                 borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.shadowColor.withValues(alpha: 0.18),
+                    color: AppTheme.shadowColor.withOpacity(0.18),
                     blurRadius: 24,
                     offset: const Offset(0, 12),
                   ),

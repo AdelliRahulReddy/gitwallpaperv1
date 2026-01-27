@@ -39,7 +39,6 @@ class _NavigationHubState extends State<NavigationHub> {
     final titles = ['Dashboard', 'Statistics', 'Customize', 'Settings'];
     
     return Scaffold(
-      extendBody: true, // Allow body to flow under navigation bar
       appBar: AppBar(
         title: Text(
           titles[_selectedIndex],
@@ -53,49 +52,39 @@ class _NavigationHubState extends State<NavigationHub> {
       ),
       body: Container(
         decoration: const BoxDecoration(gradient: AppTheme.mainBgGradient),
-        child: IndexedStack(
-          index: _selectedIndex,
-          children: _pages,
-        ),
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            top: BorderSide(
-              color: Colors.black.withOpacity(0.05),
-              width: 1,
-            ),
+        child: SafeArea(
+          bottom: false, // NavigationBar handles the bottom safe area
+          child: IndexedStack(
+            index: _selectedIndex,
+            children: _pages,
           ),
         ),
-        child: NavigationBar(
-          selectedIndex: _selectedIndex,
-          onDestinationSelected: _onItemTapped,
-          backgroundColor: Colors.transparent, // Use Container background
-          elevation: 0,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined, size: 24),
-              selectedIcon: Icon(Icons.home, size: 24),
-              label: 'Home',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.bar_chart_outlined, size: 24),
-              selectedIcon: Icon(Icons.bar_chart, size: 24),
-              label: 'Stats',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.palette_outlined, size: 24),
-              selectedIcon: Icon(Icons.palette, size: 24),
-              label: 'Customize',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.settings_outlined, size: 24),
-              selectedIcon: Icon(Icons.settings, size: 24),
-              label: 'Settings',
-            ),
-          ],
-        ),
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: _onItemTapped,
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.bar_chart_outlined),
+            selectedIcon: Icon(Icons.bar_chart),
+            label: 'Stats',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.palette_outlined),
+            selectedIcon: Icon(Icons.palette),
+            label: 'Customize',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
+        ],
       ),
     );
   }

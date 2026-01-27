@@ -335,7 +335,7 @@ class _SetupPageState extends State<SetupPage> {
                     padding: const EdgeInsets.all(AppTheme.spacing16),
                     margin: const EdgeInsets.only(bottom: AppTheme.spacing24),
                     decoration: BoxDecoration(
-                      color: AppTheme.error.withValues(alpha: 0.1),
+                      color: AppTheme.error.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(
                         AppTheme.radiusMedium,
                       ),

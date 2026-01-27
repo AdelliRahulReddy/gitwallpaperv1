@@ -146,7 +146,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     count: _pages.length,
                     effect: ExpandingDotsEffect(
                       activeDotColor: theme.colorScheme.primary,
-                      dotColor:theme.colorScheme.primary.withValues(alpha: 0.2),
+                      dotColor:theme.colorScheme.primary.withOpacity(0.2),
                       dotHeight: AppTheme.spacing8,
                       dotWidth: AppTheme.spacing8,
                       spacing: AppTheme.spacing8,
@@ -168,7 +168,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     ),
                   )
                       .animate(target: isLastPage ? 1 : 0)
-                      .tint(color: AppTheme.primaryBlue.withValues(alpha: 0.1)), 
+                      .tint(color: AppTheme.primaryBlue.withOpacity(0.1)), 
                 ],
               ),
             ),
@@ -203,7 +203,7 @@ class _OnboardingItem extends StatelessWidget {
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: content.color.withValues(alpha: 0.1),
+              color: content.color.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(content.icon, size: AppTheme.iconXL * 1.25, color: content.color),

@@ -130,8 +130,8 @@ class HeatmapRenderer {
     required bool isDarkMode,
   }) {
     final textColor = isDarkMode
-        ? AppConfig.heatmapDarkBox.withValues(alpha: 0.8)
-        : AppConfig.heatmapLightBox.withValues(alpha: 0.8);
+        ? AppConfig.heatmapDarkBox.withOpacity(0.8)
+        : AppConfig.heatmapLightBox.withOpacity(0.8);
 
     final monthName = _monthFormatter.format(DateTime.now());
     final monthPainter = TextPainter(
@@ -158,8 +158,8 @@ class HeatmapRenderer {
     required bool isDarkMode,
   }) {
     final textColor = isDarkMode
-        ? AppConfig.heatmapDarkBox.withValues(alpha: 0.6)
-        : AppConfig.heatmapLightBox.withValues(alpha: 0.6);
+        ? AppConfig.heatmapDarkBox.withOpacity(0.6)
+        : AppConfig.heatmapLightBox.withOpacity(0.6);
 
     final labels = ['Mon', 'Wed', 'Fri'];
     final indices = [1, 3, 5];
@@ -211,7 +211,7 @@ class HeatmapRenderer {
       final contributions = data.getContributionsForDay(day);
       final color = getContributionColor(contributions, config.isDarkMode);
 
-      boxPaint.color = color.withValues(alpha: config.opacity);
+      boxPaint.color = color.withOpacity(config.opacity);
       final rect = RRect.fromRectAndRadius(
         Rect.fromLTWH(x, y, boxSize, boxSize),
         Radius.circular(config.cornerRadius * paddingMultiplier),
@@ -233,8 +233,8 @@ class HeatmapRenderer {
     required double effectiveScale,
   }) {
     final textColor = config.isDarkMode
-        ? Colors.white.withValues(alpha: config.quoteOpacity)
-        : Colors.black.withValues(alpha: config.quoteOpacity);
+        ? Colors.white.withOpacity(config.quoteOpacity)
+        : Colors.black.withOpacity(config.quoteOpacity);
 
     final quotePainter = TextPainter(
       text: TextSpan(

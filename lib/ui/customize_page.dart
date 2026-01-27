@@ -210,15 +210,12 @@ class _CustomizePageState extends State<CustomizePage> {
       padding: EdgeInsets.zero,
       children: [
         // Preview Area
-        SizedBox(
-          height: previewHeight + AppTheme.spacing24,
-          child: _buildPreview(),
-        ),
+        _buildPreview(),
 
         // Controls
         Container(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.2),
+            color: Colors.white.withOpacity(0.2),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(AppTheme.radiusXL)),
           ),
           padding: const EdgeInsets.fromLTRB(AppTheme.spacing16, AppTheme.spacing24, AppTheme.spacing16, AppTheme.spacing24),
@@ -271,13 +268,12 @@ class _CustomizePageState extends State<CustomizePage> {
   }
 
   Widget _buildPreview() {
-    final topPadding = MediaQuery.of(context).padding.top + kToolbarHeight;
     final availableHeight = MediaQuery.of(context).size.height * AppLayout.previewHeightRatio;
     final frameHeight = availableHeight * AppLayout.frameHeightRatio;
     final frameWidth = frameHeight * AppLayout.phoneAspectRatio; 
 
     return Container(
-      padding: EdgeInsets.only(top: topPadding + AppTheme.spacing8),
+      padding: const EdgeInsets.only(top: AppTheme.spacing16, bottom: AppTheme.spacing24),
       child: Center(
         child: Container(
           height: frameHeight,
@@ -288,7 +284,7 @@ class _CustomizePageState extends State<CustomizePage> {
             border: Border.all(color: Colors.black87, width: AppLayout.frameBorderWidth),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.25),
+                color: Colors.black.withOpacity(0.25),
                 blurRadius: 30,
                 offset: const Offset(0, 15),
               ),
@@ -393,9 +389,9 @@ class _CustomizePageState extends State<CustomizePage> {
       width: double.infinity,
       padding: const EdgeInsets.all(AppTheme.spacing20),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.4),
+        color: Colors.white.withOpacity(0.4),
         borderRadius: BorderRadius.circular(AppTheme.radiusXL),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
+        border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -449,7 +445,7 @@ class _CustomizePageState extends State<CustomizePage> {
         labelText: AppStrings.customQuote,
         hintText: AppStrings.quoteHint,
         filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.2),
+        fillColor: Colors.white.withOpacity(0.2),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
           borderSide: BorderSide.none,

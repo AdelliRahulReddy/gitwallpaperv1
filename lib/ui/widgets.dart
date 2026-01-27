@@ -77,8 +77,8 @@ class HeatmapPainter extends CustomPainter {
     final spacing = AppConfig.boxSpacing * config.scale;
 
     final textColor = config.isDarkMode
-        ? AppConfig.heatmapDarkBox.withValues(alpha: 0.6)
-        : AppConfig.heatmapLightBox.withValues(alpha: 0.6);
+        ? AppConfig.heatmapDarkBox.withOpacity(0.6)
+        : AppConfig.heatmapLightBox.withOpacity(0.6);
 
     // "Less" label
     final lessTextPainter = TextPainter(
@@ -96,7 +96,7 @@ class HeatmapPainter extends CustomPainter {
     for (int i = 0; i < 5; i++) {
       final color = HeatmapRenderer.getContributionColor(i * 3, config.isDarkMode); // 0, 3, 6, 9, 12
       final paint = Paint()
-        ..color = color.withValues(alpha: config.opacity)
+        ..color = color.withOpacity(config.opacity)
         ..style = PaintingStyle.fill;
 
       final rect = RRect.fromRectAndRadius(
@@ -257,10 +257,10 @@ class ErrorView extends StatelessWidget {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: AppTheme.error.withValues(alpha: 0.1),
+                color: AppTheme.error.withOpacity(0.1),
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: AppTheme.error.withValues(alpha: 0.3),
+                  color: AppTheme.error.withOpacity(0.3),
                   width: 2,
                 ),
               ),
@@ -373,15 +373,15 @@ class StatCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.4),
+        color: Colors.white.withOpacity(0.4),
         borderRadius: BorderRadius.circular(AppTheme.radiusXL),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.6),
+          color: Colors.white.withOpacity(0.6),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: color.withValues(alpha: 0.1),
+            color: color.withOpacity(0.1),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -401,8 +401,8 @@ class StatCard extends StatelessWidget {
                 gradient: gradient?.withOpacity(0.1) ??
                     LinearGradient(
                       colors: [
-                        color.withValues(alpha: 0.1),
-                        color.withValues(alpha: 0.05)
+                        color.withOpacity(0.1),
+                        color.withOpacity(0.05)
                       ],
                     ),
                 shape: BoxShape.circle,
@@ -418,7 +418,7 @@ class StatCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(AppTheme.spacing8),
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.1),
+                    color: color.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                   ),
                   child: Icon(icon, color: color, size: 20),
@@ -454,7 +454,7 @@ extension GradientExtension on Gradient {
     if (this is LinearGradient) {
       final g = this as LinearGradient;
       return LinearGradient(
-        colors: g.colors.map((c) => c.withValues(alpha: opacity)).toList(),
+        colors: g.colors.map((c) => c.withOpacity(opacity)).toList(),
         begin: g.begin,
         end: g.end,
         stops: g.stops,
@@ -521,10 +521,10 @@ class SuccessBanner extends StatelessWidget {
         vertical: AppTheme.spacing12,
       ),
       decoration: BoxDecoration(
-        color: AppTheme.success.withValues(alpha: 0.15),
+        color: AppTheme.success.withOpacity(0.15),
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
         border: Border.all(
-          color: AppTheme.success.withValues(alpha: 0.5),
+          color: AppTheme.success.withOpacity(0.5),
           width: 1.5,
         ),
       ),
