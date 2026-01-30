@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "826591895293",
+    "project_id": "gitwall-d63cc",
+    "storage_bucket": "gitwall-d63cc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:826591895293:android:91505e5ae02eef985d6894",
+        "android_client_info": {
+          "package_name": "com.rahulreddy.githubwallpaper"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDD1CVX-40IF7Ac68yMoZ2-ySPaILEjlS0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

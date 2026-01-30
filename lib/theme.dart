@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════════════
-// 🎨 THEME - Calm & Focus Premium Light (Glass & Depth)
+// 🎨 THEME - Simple MVP (Clean & Minimal) - UPDATED
 // ══════════════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
@@ -8,52 +8,35 @@ import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // ════════════════════════════════════════════════════════════════════════
-  // SPACING SCALE (8pt grid system)
+  // SPACING (Only what you need)
   // ════════════════════════════════════════════════════════════════════════
 
-  static const double spacing4 = 4.0;
-  static const double spacing6 = 6.0;
   static const double spacing8 = 8.0;
   static const double spacing12 = 12.0;
   static const double spacing16 = 16.0;
-  static const double spacing20 = 20.0;
   static const double spacing24 = 24.0;
   static const double spacing32 = 32.0;
-  static const double spacing48 = 48.0;
-  static const double spacing64 = 64.0;
 
   // ════════════════════════════════════════════════════════════════════════
   // BORDER RADIUS
   // ════════════════════════════════════════════════════════════════════════
 
-  static const double radiusSmall = 6.0;
   static const double radiusMedium = 12.0;
   static const double radiusLarge = 16.0;
   static const double radiusXL = 24.0;
-  static const double radiusFull = 999.0;
 
   // ════════════════════════════════════════════════════════════════════════
-  // ICON SIZES
-  // ════════════════════════════════════════════════════════════════════════
-
-  static const double iconSmall = 18.0;
-  static const double iconMedium = 24.0;
-  static const double iconLarge = 32.0;
-  static const double iconXL = 48.0;
-
-  // ════════════════════════════════════════════════════════════════════════
-  // CALM & FOCUS LIGHT PALETTE (from prototype)
-// Soft sky blues + crisp azure for a distraction-free environment
+  // COLORS - Core palette only
   // ════════════════════════════════════════════════════════════════════════
 
   // Background
-  static const Color bg = Color(0xFFF0F9FF); // base canvas
+  static const Color bg = Color(0xFFF0F9FF);
 
   static const LinearGradient mainBgGradient = LinearGradient(
     colors: [
-      Color(0xFFF0F9FF), // Sky Blue (clarity)
-      Color(0xFFE0F2FE), // Light Blue (calm)
-      Color(0xFFDBEAFE), // Soft Blue (focus)
+      Color(0xFFF0F9FF), // Sky Blue
+      Color(0xFFE0F2FE), // Light Blue
+      Color(0xFFDBEAFE), // Soft Blue
     ],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
@@ -61,24 +44,26 @@ class AppTheme {
   );
 
   // Typography
-  static const Color textPrimary = Color(0xFF0F172A); // Slate 900
-  static const Color textSecondary = Color(0xFF475569); // Slate 600
-  static const Color textTertiary = Color(0xFF94A3B8); // Slate 400
+  static const Color textPrimary = Color(0xFF0F172A);
+  static const Color textSecondary = Color(0xFF475569);
+  static const Color textTertiary = Color(0xFF94A3B8);
 
-  // Accents
-  static const Color primaryBlue = Color(0xFF2563EB); // Focus blue
+  // Main accent colors
+  static const Color primaryBlue = Color(0xFF2563EB);
   static const Color successGreen = Color(0xFF10B981);
   static const Color alertOrange = Color(0xFFF59E0B);
+  static const Color brandPurple = Color(0xFF8B5CF6);
 
-  // Icon gradients
-  static const LinearGradient accentPurple = LinearGradient(
-    colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  // Borders
+  static const Color borderDefault = Color(0xFFE2E8F0);
+  static const Color shadowColor = Color(0xFF1E293B);
 
-  static const LinearGradient accentOrange = LinearGradient(
-    colors: [Color(0xFFFB923C), Color(0xFFEA580C)],
+  // ════════════════════════════════════════════════════════════════════════
+  // GRADIENTS - For stat cards
+  // ════════════════════════════════════════════════════════════════════════
+
+  static const LinearGradient accentBlue = LinearGradient(
+    colors: [Color(0xFF60A5FA), Color(0xFF2563EB)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -89,94 +74,32 @@ class AppTheme {
     end: Alignment.bottomRight,
   );
 
-  static const LinearGradient accentBlue = LinearGradient(
-    colors: [Color(0xFF60A5FA), Color(0xFF2563EB)],
+  static const LinearGradient accentOrange = LinearGradient(
+    colors: [Color(0xFFFB923C), Color(0xFFEA580C)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  // Depth / shadow
-  static const Color shadowColor = Color(0xFF1E293B);
-
-  // ════════════════════════════════════════════════════════════════════════
-  // MISSING MEMBERS (Legacy Compatibility & Aliases)
-  // ════════════════════════════════════════════════════════════════════════
-
-  // Basic Colors
-  static const Color brandBlue = primaryBlue;
-  static const Color brandGreen = successGreen;
-  static const Color brandOrange = alertOrange;
-  static const Color brandPurple = Color(0xFF8B5CF6);
-
-  static const Color bluePrimary = primaryBlue;
-  static const Color greenPrimary = successGreen;
-  static const Color orangePrimary = alertOrange;
-  static const Color purplePrimary = brandPurple;
-
-  static const Color textMuted = textTertiary;
-  static const Color error = Colors.redAccent;
-  static const Color success = successGreen;
-  static const Color info = primaryBlue;
-
-  static const Color borderDefault = Color(0xFFE2E8F0);
-  static const Color surfaceElevated = Colors.white;
-  static const Color surfaceHover = Color(0xFFF8FAFC);
-
-  // Gradients
-  static const LinearGradient cardGradient = LinearGradient(
-    colors: [Colors.white, Color(0xFFF8FAFC)],
+  static const LinearGradient accentPurple = LinearGradient(
+    colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  static const LinearGradient blueStatsGradient = accentBlue;
-  static const LinearGradient greenStatsGradient = accentGreen;
-  static const LinearGradient orangeStatsGradient = accentOrange;
-  static const LinearGradient purpleStatsGradient = accentPurple;
+  // ════════════════════════════════════════════════════════════════════════
+  // SHADOWS
+  // ════════════════════════════════════════════════════════════════════════
 
-  // Shadows / Glows
   static List<BoxShadow> get blueCardGlow => [
         BoxShadow(
-          color: primaryBlue.withOpacity(0.1),
-          blurRadius: 20,
-          offset: const Offset(0, 10),
-        )
-      ];
-
-  static List<BoxShadow> get greenCardGlow => [
-        BoxShadow(
-          color: successGreen.withOpacity(0.1),
-          blurRadius: 20,
-          offset: const Offset(0, 10),
-        )
-      ];
-
-  static List<BoxShadow> get orangeCardGlow => [
-        BoxShadow(
-          color: alertOrange.withOpacity(0.1),
-          blurRadius: 20,
-          offset: const Offset(0, 10),
-        )
-      ];
-
-  static List<BoxShadow> get purpleCardGlow => [
-        BoxShadow(
-          color: brandPurple.withOpacity(0.1),
-          blurRadius: 20,
-          offset: const Offset(0, 10),
+          color: primaryBlue.withValues(alpha: 0.15), // ✅ FIXED
+          blurRadius: 12,
+          offset: const Offset(0, 6),
         )
       ];
 
   // ════════════════════════════════════════════════════════════════════════
-  // ANIMATION DURATIONS
-  // ════════════════════════════════════════════════════════════════════════
-
-  static const Duration animationFast = Duration(milliseconds: 150);
-  static const Duration animationNormal = Duration(milliseconds: 300);
-  static const Duration animationSlow = Duration(milliseconds: 500);
-
-  // ════════════════════════════════════════════════════════════════════════
-  // UNIVERSAL THEME - Calm & Focus Premium Light
+  // THEME DATA
   // ════════════════════════════════════════════════════════════════════════
 
   static ThemeData get theme {
@@ -187,16 +110,14 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.light,
       scaffoldBackgroundColor: bg,
-      // fontFamily: 'Inter', // Removed to avoid conflict with GoogleFonts
 
-      // ColorScheme seeded by focus blue
       colorScheme: ColorScheme.fromSeed(
         seedColor: primaryBlue,
         surface: bg,
         brightness: Brightness.light,
       ),
 
-      // AppBar – clean, minimal, sitting over gradient background
+      // AppBar
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -215,20 +136,17 @@ class AppTheme {
         ),
       ),
 
-      // Card – frosted glass base
+      // Card
       cardTheme: const CardThemeData(
-        color: Color(0xBFFFFFFF), // White with 75% opacity (safe const)
+        color: Color(0xBFFFFFFF),
         elevation: 0.0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(radiusXL)),
-          side: BorderSide(
-             color: Color(0x99FFFFFF), // White with 60% opacity
-             width: 1.5,
-          ),
+          side: BorderSide(color: Color(0x99FFFFFF), width: 1.5),
         ),
       ),
 
-      // Typography – tuned for readability on soft blue background
+      // Typography
       textTheme: textTheme.copyWith(
         displaySmall: textTheme.displaySmall?.copyWith(
           color: textPrimary,
@@ -262,7 +180,7 @@ class AppTheme {
         ),
       ),
 
-      // Primary buttons – crisp azure focus color
+      // Buttons
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryBlue,
@@ -282,7 +200,6 @@ class AppTheme {
         ),
       ),
 
-      // Text buttons – link-style actions
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: primaryBlue,
@@ -293,12 +210,11 @@ class AppTheme {
         ),
       ),
 
-      // Outlined buttons – subtle secondary actions
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: textPrimary,
           side: BorderSide(
-            color: textTertiary.withOpacity(0.4),
+            color: textTertiary.withValues(alpha: 0.4), // ✅ FIXED
             width: 1.3,
           ),
           padding: const EdgeInsets.symmetric(
@@ -311,31 +227,21 @@ class AppTheme {
         ),
       ),
 
-      // FAB – use focus blue
-      floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: primaryBlue,
-        foregroundColor: Colors.white,
-        elevation: 10.0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(radiusLarge),
-        ),
-      ),
-
-      // Inputs – minimal, soft borders
+      // Input fields
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white.withOpacity(0.8),
+        fillColor: Colors.white.withValues(alpha: 0.8), // ✅ FIXED
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
           borderSide: BorderSide(
-            color: textTertiary.withOpacity(0.4),
+            color: textTertiary.withValues(alpha: 0.4), // ✅ FIXED
             width: 1.3,
           ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
           borderSide: BorderSide(
-            color: textTertiary.withOpacity(0.4),
+            color: textTertiary.withValues(alpha: 0.4), // ✅ FIXED
             width: 1.3,
           ),
         ),
@@ -361,53 +267,39 @@ class AppTheme {
         hintStyle: const TextStyle(color: textTertiary),
       ),
 
-      // Dividers – very soft
-      dividerTheme: DividerThemeData(
-        color: textTertiary.withOpacity(0.2),
-        thickness: 1.0,
-        space: 1.0,
-      ),
-
-      // Progress indicator – focus blue
+      // Progress indicator
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: primaryBlue,
-        circularTrackColor: textTertiary.withOpacity(0.2),
+        circularTrackColor: textTertiary.withValues(alpha: 0.2), // ✅ FIXED
       ),
 
-      // SnackBar – Default neutral style to avoid conflicts
-      snackBarTheme: const SnackBarThemeData(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        behavior: SnackBarBehavior.floating, 
-      ),
-
-      // Switch – use green for confirmation
+      // Switch
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return successGreen;
-          return textTertiary;
+          return states.contains(WidgetState.selected)
+              ? successGreen
+              : textTertiary;
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return successGreen.withOpacity(0.4);
-          }
-          return textTertiary.withOpacity(0.3);
+          return states.contains(WidgetState.selected)
+              ? successGreen.withValues(alpha: 0.4) // ✅ FIXED
+              : textTertiary.withValues(alpha: 0.3); // ✅ FIXED
         }),
       ),
 
-      // Slider – focus blue
+      // Slider
       sliderTheme: SliderThemeData(
         activeTrackColor: primaryBlue,
-        inactiveTrackColor: textTertiary.withOpacity(0.3),
+        inactiveTrackColor: textTertiary.withValues(alpha: 0.3), // ✅ FIXED
         thumbColor: primaryBlue,
-        overlayColor: primaryBlue.withOpacity(0.2),
+        overlayColor: primaryBlue.withValues(alpha: 0.2), // ✅ FIXED
         valueIndicatorColor: primaryBlue,
       ),
 
-      // Navigation Bar – modern Material 3, distinct from background
+      // Navigation Bar
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: Colors.white.withOpacity(0.9),
-        indicatorColor: primaryBlue.withOpacity(0.1),
+        backgroundColor: Colors.white.withValues(alpha: 0.9), // ✅ FIXED
+        indicatorColor: primaryBlue.withValues(alpha: 0.1), // ✅ FIXED
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return textTheme.labelMedium?.copyWith(

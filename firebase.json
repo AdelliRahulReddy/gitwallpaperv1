@@ -1,1 +1,48 @@
-{"functions":[{"source":"functions","codebase":"default","ignore":["node_modules",".git","firebase-debug.log","firebase-debug.*.log"]}],"flutter":{"platforms":{"android":{"default":{"projectId":"gitwall-d63cc","appId":"1:826591895293:android:91505e5ae02eef985d6894","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"gitwall-d63cc","configurations":{"android":"1:826591895293:android:91505e5ae02eef985d6894","ios":"1:826591895293:ios:b441ed2d57690dcf5d6894","macos":"1:826591895293:ios:b441ed2d57690dcf5d6894","web":"1:826591895293:web:16c61e38e4818f165d6894","windows":"1:826591895293:web:122a427146b7437f5d6894"}}}}}}
+{
+    "functions": [
+        {
+            "source": "functions",
+            "codebase": "default",
+            "ignore": [
+                "node_modules",
+                ".git",
+                "firebase-debug.log",
+                "firebase-debug.*.log"
+            ]
+        }
+    ],
+    "emulators": {
+        "functions": {
+            "port": 5001
+        },
+        "pubsub": {
+            "port": 8085
+        },
+        "ui": {
+            "enabled": true
+        }
+    },
+    "flutter": {
+        "platforms": {
+            "android": {
+                "default": {
+                    "projectId": "gitwall-d63cc",
+                    "appId": "1:826591895293:android:91505e5ae02eef985d6894",
+                    "fileOutput": "android/app/google-services.json"
+                }
+            },
+            "dart": {
+                "lib/firebase_options.dart": {
+                    "projectId": "gitwall-d63cc",
+                    "configurations": {
+                        "android": "1:826591895293:android:91505e5ae02eef985d6894",
+                        "ios": "1:826591895293:ios:b441ed2d57690dcf5d6894",
+                        "macos": "1:826591895293:ios:b441ed2d57690dcf5d6894",
+                        "web": "1:826591895293:web:16c61e38e4818f165d6894",
+                        "windows": "1:826591895293:web:122a427146b7437f5d6894"
+                    }
+                }
+            }
+        }
+    }
+}

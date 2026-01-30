@@ -1,6 +1,6 @@
 /**
  * GitHub Wallpaper - Cloud Scheduler Function
- * Triggers a silent push notification to all subscribed devices daily.
+ * Triggers a silent push notification to all subscribed devices.
  */
 
 const functions = require("firebase-functions");
@@ -8,17 +8,16 @@ const admin = require("firebase-admin");
 
 admin.initializeApp();
 
-// Schedule: Every 15 minutes for testing (Original: "every day 00:00")
-// Timezone: America/New_York (or UTC, user preference)
+// Schedule: Every 5 minutes
+// Timezone: UTC
 exports.triggerDailyUpdate = functions.pubsub
     .schedule("every 5 minutes")
-    .timeZone("UTC") // Default to UTC
+    .timeZone("UTC")
     .onRun(async (context) => {
         console.log("⏰ Daily Update Triggered");
 
-        // "Silent Push" Payload
-        // Just a data message, NO 'notification' key (which would show UI)
-        const payload = {
+        // Build message payload
+        const message = {
             data: {
                 type: "daily_refresh",
                 timestamp: new Date().toISOString(),
@@ -27,7 +26,7 @@ exports.triggerDailyUpdate = functions.pubsub
                 priority: "high",
                 ttl: 3600 * 1000, // 1 hour
             },
-            topic: "daily-updates",
+            topic: "daily-updates", // ✅ Correct placement
         };
 
         let attempts = 0;
@@ -37,7 +36,7 @@ exports.triggerDailyUpdate = functions.pubsub
         while (attempts < maxAttempts) {
             try {
                 // Send to 'daily-updates' topic
-                const response = await admin.messaging().send(payload);
+                const response = await admin.messaging().send(message);
                 console.log(`✅ Successfully sent update message (Attempt ${attempts + 1}):`, response);
                 return null;
             } catch (error) {

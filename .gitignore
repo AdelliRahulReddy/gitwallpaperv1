@@ -52,8 +52,8 @@ android/local.properties
 upload-keystore.jks
 
 # Firebase Configuration (Optional but recommended for public repos)
-android/app/google-services.json
-lib/firebase_options.dart
+# android/app/google-services.json
+# lib/firebase_options.dart
 
 # Build & Temp
 .gradle/

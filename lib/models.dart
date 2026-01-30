@@ -5,8 +5,7 @@
 // No business logic - only data representation
 // ══════════════════════════════════════════════════════════════════════════
 
-
-import 'package:flutter/material.dart'; // Added for Color, IconData
+import 'package:flutter/widgets.dart'; // For debugPrint only
 
 // ══════════════════════════════════════════════════════════════════════════
 // CONTRIBUTION DAY - Single day's data
@@ -16,7 +15,7 @@ class ContributionDay {
   final DateTime date;
   final int contributionCount;
   final String?
-  contributionLevel; // NONE, FIRST_QUARTILE, SECOND_QUARTILE, etc.
+      contributionLevel; // NONE, FIRST_QUARTILE, SECOND_QUARTILE, etc.
 
   ContributionDay({
     required this.date,
@@ -44,10 +43,10 @@ class ContributionDay {
 
   /// Convert to JSON
   Map<String, dynamic> toJson() => {
-    'date': date.toIso8601String(),
-    'contributionCount': contributionCount,
-    'contributionLevel': contributionLevel,
-  };
+        'date': date.toIso8601String(),
+        'contributionCount': contributionCount,
+        'contributionLevel': contributionLevel,
+      };
 
   /// Check if this is an active day (has contributions)
   bool get isActive => contributionCount > 0;
@@ -149,17 +148,17 @@ class CachedContributionData {
 
   /// Convert to JSON
   Map<String, dynamic> toJson() => {
-    'username': username,
-    'totalContributions': totalContributions,
-    'currentStreak': currentStreak,
-    'longestStreak': longestStreak,
-    'todayCommits': todayCommits,
-    'days': days.map((d) => d.toJson()).toList(),
-    'dailyContributions': dailyContributions.map(
-      (key, value) => MapEntry(key.toString(), value),
-    ),
-    'lastUpdated': lastUpdated.toIso8601String(),
-  };
+        'username': username,
+        'totalContributions': totalContributions,
+        'currentStreak': currentStreak,
+        'longestStreak': longestStreak,
+        'todayCommits': todayCommits,
+        'days': days.map((d) => d.toJson()).toList(),
+        'dailyContributions': dailyContributions.map(
+          (key, value) => MapEntry(key.toString(), value),
+        ),
+        'lastUpdated': lastUpdated.toIso8601String(),
+      };
 
   /// Get contribution count for specific day of month (1-31)
   int getContributionsForDay(int dayOfMonth) {
@@ -249,19 +248,20 @@ class WallpaperConfig {
 
   factory WallpaperConfig.fromJson(Map<String, dynamic> json) {
     return WallpaperConfig(
-        isDarkMode: json['isDarkMode'] as bool? ?? false,
-        verticalPosition: (json['verticalPosition'] as num?)?.toDouble() ?? 0.5,
-        horizontalPosition: (json['horizontalPosition'] as num?)?.toDouble() ?? 0.5,
-        scale: (json['scale'] as num?)?.toDouble() ?? 0.7,
-        opacity: (json['opacity'] as num?)?.toDouble() ?? 1.0,
-        customQuote: json['customQuote'] as String? ?? '',
-        quoteFontSize: (json['quoteFontSize'] as num?)?.toDouble() ?? 14.0,
-        quoteOpacity: (json['quoteOpacity'] as num?)?.toDouble() ?? 1.0,
-        paddingTop: (json['paddingTop'] as num?)?.toDouble() ?? 0.0,
-        paddingBottom: (json['paddingBottom'] as num?)?.toDouble() ?? 0.0,
-        paddingLeft: (json['paddingLeft'] as num?)?.toDouble() ?? 0.0,
-        paddingRight: (json['paddingRight'] as num?)?.toDouble() ?? 0.0,
-        cornerRadius: (json['cornerRadius'] as num?)?.toDouble() ?? 0.0,
+      isDarkMode: json['isDarkMode'] as bool? ?? false,
+      verticalPosition: (json['verticalPosition'] as num?)?.toDouble() ?? 0.5,
+      horizontalPosition:
+          (json['horizontalPosition'] as num?)?.toDouble() ?? 0.5,
+      scale: (json['scale'] as num?)?.toDouble() ?? 0.7,
+      opacity: (json['opacity'] as num?)?.toDouble() ?? 1.0,
+      customQuote: json['customQuote'] as String? ?? '',
+      quoteFontSize: (json['quoteFontSize'] as num?)?.toDouble() ?? 14.0,
+      quoteOpacity: (json['quoteOpacity'] as num?)?.toDouble() ?? 1.0,
+      paddingTop: (json['paddingTop'] as num?)?.toDouble() ?? 0.0,
+      paddingBottom: (json['paddingBottom'] as num?)?.toDouble() ?? 0.0,
+      paddingLeft: (json['paddingLeft'] as num?)?.toDouble() ?? 0.0,
+      paddingRight: (json['paddingRight'] as num?)?.toDouble() ?? 0.0,
+      cornerRadius: (json['cornerRadius'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
@@ -279,7 +279,7 @@ class WallpaperConfig {
         'paddingLeft': paddingLeft,
         'paddingRight': paddingRight,
         'cornerRadius': cornerRadius,
-  };
+      };
 
   /// Create copy with modifications
   WallpaperConfig copyWith({
@@ -321,21 +321,21 @@ class WallpaperConfig {
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-  
+
     return other is WallpaperConfig &&
-      other.isDarkMode == isDarkMode &&
-      other.verticalPosition == verticalPosition &&
-      other.horizontalPosition == horizontalPosition &&
-      other.scale == scale &&
-      other.opacity == opacity &&
-      other.customQuote == customQuote &&
-      other.quoteFontSize == quoteFontSize &&
-      other.quoteOpacity == quoteOpacity &&
-      other.paddingTop == paddingTop &&
-      other.paddingBottom == paddingBottom &&
-      other.paddingLeft == paddingLeft &&
-      other.paddingRight == paddingRight &&
-      other.cornerRadius == cornerRadius;
+        other.isDarkMode == isDarkMode &&
+        other.verticalPosition == verticalPosition &&
+        other.horizontalPosition == horizontalPosition &&
+        other.scale == scale &&
+        other.opacity == opacity &&
+        other.customQuote == customQuote &&
+        other.quoteFontSize == quoteFontSize &&
+        other.quoteOpacity == quoteOpacity &&
+        other.paddingTop == paddingTop &&
+        other.paddingBottom == paddingBottom &&
+        other.paddingLeft == paddingLeft &&
+        other.paddingRight == paddingRight &&
+        other.cornerRadius == cornerRadius;
   }
 
   @override
@@ -356,22 +356,4 @@ class WallpaperConfig {
       cornerRadius,
     );
   }
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// ONBOARDING CONTENT
-// ══════════════════════════════════════════════════════════════════════════
-
-class OnboardingContent {
-  final IconData icon;
-  final String title;
-  final String description;
-  final Color color;
-
-  const OnboardingContent({
-    required this.icon,
-    required this.title,
-    required this.description,
-    required this.color,
-  });
 }
