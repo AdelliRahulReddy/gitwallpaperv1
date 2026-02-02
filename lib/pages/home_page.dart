@@ -874,35 +874,28 @@ class _ScrollableHeatmapGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Process data into weeks
-    // Default to showing last 6 months effectively (approx 180 days)
+    // Process data into weeks (last ~180 days)
     final displayDays =
         days.length > 180 ? days.sublist(days.length - 180) : days;
+    if (displayDays.isEmpty) {
+      return const Center(child: Text('No activity data'));
+    }
 
-    // Group by week
-    // We'll organize as List<List<ContributionDay?>> where outer list is columns (weeks)
-    // and inner list is days (rows) [Sun..Sat]
-
-    final List<List<ContributionDay?>> weeks = [];
-    List<ContributionDay?> currentWeek = List.filled(7, null);
-
+    // Group by calendar week: week start = Sunday (row 0), then Mon..Sat (rows 1..6).
+    // Dart: weekday 1=Mon, 7=Sun → index 0=Sun is weekday % 7 (7→0, 1→1, ..., 6→6).
+    final Map<String, List<ContributionDay?>> weekKeyToSlots = {};
     for (var day in displayDays) {
-      // 1=Mon...7=Sun. Map to 0=Sun...6=Sat for Standard GitHub View?
-      // GitHub standard: 0=Sun, 1=Mon, ..., 6=Sat.
-      final weekdayIndex = day.date.weekday % 7;
-
-      currentWeek[weekdayIndex] = day;
-
-      if (weekdayIndex == 6) {
-        // Week ends on Saturday
-        weeks.add(List.from(currentWeek));
-        currentWeek = List.filled(7, null);
-      }
+      final d = day.date;
+      final weekStart = DateTime(d.year, d.month, d.day)
+          .subtract(Duration(days: d.weekday % 7));
+      final key = '${weekStart.year}-${weekStart.month.toString().padLeft(2, '0')}-${weekStart.day.toString().padLeft(2, '0')}';
+      weekKeyToSlots.putIfAbsent(key, () => List.filled(7, null));
+      weekKeyToSlots[key]![d.weekday % 7] = day;
     }
-    // Add pending week
-    if (currentWeek.any((d) => d != null)) {
-      weeks.add(currentWeek);
-    }
+
+    final sortedKeys = weekKeyToSlots.keys.toList()..sort();
+    final List<List<ContributionDay?>> weeks =
+        sortedKeys.map((k) => List<ContributionDay?>.from(weekKeyToSlots[k]!)).toList();
 
     return ListView.separated(
       scrollDirection: Axis.horizontal,

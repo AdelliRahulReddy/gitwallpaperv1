@@ -286,8 +286,24 @@ class ContributionStats {
         orElse: () => ContributionDay(date: yesterday, contributionCount: 0),
       );
       if (yesterdayDay.isActive) {
-        // Count from yesterday
-        currentStreak = tempStreak;
+        // Streak is the consecutive days ending yesterday; tempStreak may be 0 here,
+        // so count backwards from yesterday.
+        int graceStreak = 0;
+        DateTime? expect = yesterday;
+        for (final day in sortedDays) {
+          final dayDate = AppDateUtils.toDateOnly(day.date);
+          if (expect != null && AppDateUtils.isSameDay(dayDate, expect)) {
+            if (day.isActive) {
+              graceStreak++;
+              expect = dayDate.subtract(const Duration(days: 1));
+            } else {
+              break;
+            }
+          } else if (expect != null && dayDate.isBefore(expect)) {
+            break;
+          }
+        }
+        currentStreak = graceStreak;
       }
     }
 
@@ -555,7 +571,7 @@ class WallpaperConfig {
             _parseDouble(json['horizontalPosition'], 0.5, 0.0, 1.0),
         scale: _parseDouble(
             json['scale'], AppConstants.defaultWallpaperScale, 0.5, 3.0),
-        autoFitWidth: json['autoFitWidth'] as bool? ?? false,
+        autoFitWidth: json['autoFitWidth'] as bool? ?? true,
         opacity: _parseDouble(
             json['opacity'], AppConstants.defaultWallpaperOpacity, 0.0, 1.0),
         customQuote: (json['customQuote'] as String? ?? '').trim(),

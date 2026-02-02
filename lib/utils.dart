@@ -85,7 +85,9 @@ class ErrorHandler {
     );
   }
 
-  /// Hide loading dialog
+  /// Hide loading dialog.
+  /// Only call when the loading dialog is the topmost route;
+  /// otherwise may accidentally pop another dialog.
   static void hideLoading(BuildContext context) {
     if (context.mounted) {
       Navigator.of(context, rootNavigator: true).pop();
@@ -299,5 +301,5 @@ class AppStrings {
   static const developer = 'DEVELOPED BY';
   static const developerName = 'Adelli Rahulreddy';
   static const developerTagline = 'Building tools for developers';
-  static const appVersion = '1.0.0';
+  static const appVersion = '1.0.1';
 }

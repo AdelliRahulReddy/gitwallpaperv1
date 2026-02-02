@@ -32,7 +32,8 @@ class _CustomizePageState extends State<CustomizePage> {
   late TextEditingController _quoteController;
   bool _isGenerating = false;
   String _deviceName = 'Loading device info...';
-  WallpaperTarget _previewTarget = WallpaperTarget.lock;
+  // Fixed to lock screen layout; preview uses MonthHeatmapRenderer for all targets
+  static const WallpaperTarget _previewTarget = WallpaperTarget.lock;
 
   @override
   void initState() {
@@ -79,9 +80,8 @@ class _CustomizePageState extends State<CustomizePage> {
     );
     final targetWidth =
         wallpaperWidth - effectiveConfig.paddingLeft - effectiveConfig.paddingRight;
-    final columns = _previewTarget == WallpaperTarget.lock
-        ? AppConstants.monthGridColumns
-        : AppConstants.heatmapWeeks;
+    // Preview always uses month calendar (7 columns)
+    const columns = AppConstants.monthGridColumns;
     final baseGraphWidth =
         (AppConstants.heatmapBoxSize + AppConstants.heatmapBoxSpacing) *
                 columns -
@@ -235,8 +235,7 @@ class _CustomizePageState extends State<CustomizePage> {
                 ),
               ),
               const SizedBox(height: AppTheme.spacing12),
-              _buildThemeSection(),
-              const SizedBox(height: AppTheme.spacing24),
+              // Theme toggle removed
               _buildCustomizationSection(),
               const SizedBox(height: AppTheme.spacing32),
               _buildApplyButton(),
@@ -345,6 +344,7 @@ class _CustomizePageState extends State<CustomizePage> {
     var wallpaperHeight = dims?['height'] ?? AppConstants.defaultWallpaperHeight;
     final wallpaperPixelRatio = dims?['pixelRatio'] ?? AppConstants.defaultPixelRatio;
 
+    // Android Home/Both screens may use different dimensions than lock; use stored desired size when available
     if (Platform.isAndroid &&
         (_previewTarget == WallpaperTarget.home ||
             _previewTarget == WallpaperTarget.both)) {
@@ -454,47 +454,7 @@ class _CustomizePageState extends State<CustomizePage> {
   // THEME SECTION
   // ══════════════════════════════════════════════════════════════════════
 
-  Widget _buildThemeSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Theme',
-          style: TextStyle(
-            fontSize: AppTheme.fontSizeLead,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _ThemeCard(
-                label: 'Dark',
-                icon: Icons.dark_mode,
-                isSelected: _config.isDarkMode,
-                onTap: () {
-                  _updateConfig(_config.copyWith(isDarkMode: true));
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _ThemeCard(
-                label: 'Light',
-                icon: Icons.light_mode,
-                isSelected: !_config.isDarkMode,
-                onTap: () {
-                  _updateConfig(_config.copyWith(isDarkMode: false));
-                },
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
+// Theme section removed as per user request ("REMOVE DARK AND LIGHHT MODE WE KEEP SYSTEM DEFAULT")
 
   // ══════════════════════════════════════════════════════════════════════
   // CUSTOMIZATION SECTION
@@ -829,73 +789,6 @@ class _CustomizePageState extends State<CustomizePage> {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// THEME CARD WIDGET
-// ══════════════════════════════════════════════════════════════════════════
-
-class _ThemeCard extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _ThemeCard({
-    required this.label,
-    required this.icon,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: isSelected,
-      label: '$label theme',
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.all(AppTheme.spacing20),
-            decoration: BoxDecoration(
-              color: isSelected ? AppTheme.primaryBlue : AppTheme.bgWhite,
-              borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
-              border: Border.all(
-                color: isSelected ? AppTheme.primaryBlue : AppTheme.borderLight,
-                width: isSelected ? 2 : 1,
-              ),
-              boxShadow: isSelected
-                  ? AppTheme.gradientShadow(AppTheme.primaryBlue)
-                  : AppTheme.cardShadow,
-            ),
-            child: Column(
-              children: [
-                Icon(
-                  icon,
-                  size: 32,
-                  color: isSelected ? AppTheme.textWhite : AppTheme.textSecondary,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: AppTheme.fontSizeBase,
-                    fontWeight: FontWeight.w600,
-                    color: isSelected ? AppTheme.textWhite : AppTheme.textPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════
 // WALLPAPER PREVIEW PAINTER
 // ══════════════════════════════════════════════════════════════════════════
 
@@ -940,52 +833,5 @@ class _WallpaperPreviewPainter extends CustomPainter {
         oldDelegate.wallpaperWidth != wallpaperWidth ||
         oldDelegate.wallpaperHeight != wallpaperHeight ||
         oldDelegate.target != target;
-  }
-}
-
-class _PreviewTargetChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _PreviewTargetChip({
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: isSelected,
-      label: '$label preview target',
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: isSelected ? AppTheme.primaryBlue : AppTheme.bgWhite,
-              borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
-              border: Border.all(
-                color: isSelected ? AppTheme.primaryBlue : AppTheme.borderLight,
-                width: 1,
-              ),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: AppTheme.fontSizeCaption,
-                fontWeight: FontWeight.w600,
-                color: isSelected ? AppTheme.textWhite : AppTheme.textSecondary,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

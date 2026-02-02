@@ -88,9 +88,9 @@ class _MainNavPageState extends State<MainNavPage> with WidgetsBindingObserver {
         } else {
            setState(() {
             _data = cached;
+            _loadError = null;
             _isLoading = false;
           });
-          
           _checkBackgroundSync();
         }
       } else {

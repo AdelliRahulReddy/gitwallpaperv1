@@ -74,7 +74,9 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: AppStrings.appName,
-      theme: AppTheme.theme(context),
+      theme: AppTheme.lightTheme(context),
+      darkTheme: AppTheme.darkTheme(context),
+      themeMode: ThemeMode.system,
       debugShowCheckedModeBanner: false,
       home: AppInitializer(
         storageReady: storageReady,
@@ -215,7 +217,7 @@ class _AppInitializerState extends State<AppInitializer> {
                     });
                     _startInitialization();
                   },
-                  child: const Text('Retry'),
+                  child: Text(AppStrings.retry),
                 ),
               ],
             ),

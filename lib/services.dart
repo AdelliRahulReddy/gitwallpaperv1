@@ -413,15 +413,10 @@ class WallpaperService {
       height = dims['height']!;
       pixelRatio = dims['pixelRatio']!;
     }
-
-    if (Platform.isAndroid &&
-        (target == WallpaperTarget.home || target == WallpaperTarget.both)) {
-      final desired = StorageService.getDesiredWallpaperSize();
-      if (desired != null) {
-        width = desired['width']!;
-        height = desired['height']!;
-      }
-    }
+    
+    // 100% Unified: Removed "desiredWallpaperSize" logic.
+    // We now force exact screen dimensions for ALL targets (Home, Lock, Both).
+    // This prevents the "too big" / "zoomed in" issue on Home screen.
 
     final physicalWidth = (width * pixelRatio).round();
     final physicalHeight = (height * pixelRatio).round();
@@ -802,30 +797,15 @@ class StorageService {
     return {'width': w, 'height': h};
   }
 
-  /// Get screen dimensions
+  /// Get screen dimensions (stored values are logical pixels from MediaQuery).
   static Map<String, double>? getDimensions() {
     final w = _p.getDouble(AppConstants.keyDimensionWidth);
     final h = _p.getDouble(AppConstants.keyDimensionHeight);
     final pr = _p.getDouble(AppConstants.keyDimensionPixelRatio);
 
     if (w != null && h != null && pr != null) {
-      var width = w;
-      var height = h;
-      final pixelRatio = pr;
-
-      if (pixelRatio > 1.0 && (width > 2000 || height > 2000)) {
-        final logicalW = width / pixelRatio;
-        final logicalH = height / pixelRatio;
-        if (logicalW >= 300 &&
-            logicalW <= 2000 &&
-            logicalH >= 300 &&
-            logicalH <= 4000) {
-          width = logicalW;
-          height = logicalH;
-        }
-      }
-
-      return {'width': width, 'height': height, 'pixelRatio': pixelRatio};
+      // saveDeviceMetrics stores MediaQuery size = logical pixels; do not convert again.
+      return {'width': w, 'height': h, 'pixelRatio': pr};
     }
     return null;
   }
@@ -979,10 +959,11 @@ class HeatmapRenderer {
 
     // Prepare paints
     final boxPaint = Paint()..style = PaintingStyle.fill;
+    final themeExt = config.isDarkMode ? AppThemeExtension.dark() : AppThemeExtension.light();
     final borderPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2 * effectiveScale
-      ..color = AppThemeExtension.light().heatmapTodayHighlight;
+      ..color = themeExt.heatmapTodayHighlight;
 
     // Get cached radius
     final radiusKey = '${config.cornerRadius}_$effectiveScale';
@@ -1195,7 +1176,7 @@ class MonthHeatmapRenderer {
       fontSize: 16 * effectiveScale,
       fontWeight: FontWeight.bold,
     );
-    final headerText = _headerTextForDate(ref);
+    final headerText = HeatmapRenderer._headerTextForDate(ref);
     final headerPainter = TextPainter(
       text: TextSpan(text: headerText, style: headerTextStyle),
       textDirection: ui.TextDirection.ltr,
@@ -1205,16 +1186,16 @@ class MonthHeatmapRenderer {
     final dayLabels = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
     final dayLabelStyle = TextStyle(
       color: headerColor.withValues(alpha: 0.6),
-      fontSize: 8 * effectiveScale,
+      fontSize: 7 * effectiveScale, // Reduced to ensure 3 letters fit
       fontWeight: FontWeight.w600,
-      letterSpacing: 0.5,
+      letterSpacing: 0.2, // Tighter spacing
     );
     
     final dayLabelPainters = dayLabels.map((d) => TextPainter(
       text: TextSpan(text: d, style: dayLabelStyle),
       textDirection: ui.TextDirection.ltr,
-      maxLines: 1, // Fix: Prevent wrapping ("Third word goes down")
-    )..layout(maxWidth: boxSize + 4.0)).toList(); // Allow slight overflow if needed, but keep centered
+      maxLines: 1,
+    )..layout()).toList(); // Removed maxWidth to allow full 3 letters (centering handles alignment)
 
     final headerGap = (spacing * 3).clamp(spacing, boxSize);
     final labelsRowHeight = 12 * effectiveScale;
@@ -1278,10 +1259,11 @@ class MonthHeatmapRenderer {
         : AppThemeExtension.light().heatmapLevels;
 
     final boxPaint = Paint()..style = PaintingStyle.fill;
+    final themeExt = config.isDarkMode ? AppThemeExtension.dark() : AppThemeExtension.light();
     final borderPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = (spacing / 1.5).clamp(1.0, boxSize * 0.2)
-      ..color = AppThemeExtension.light().heatmapTodayHighlight;
+      ..color = themeExt.heatmapTodayHighlight;
 
     final radiusKey = '${config.cornerRadius}_$effectiveScale';
     final radius = _radiusCache.putIfAbsent(
@@ -1298,7 +1280,7 @@ class MonthHeatmapRenderer {
       final row = i ~/ columns;
 
       final count = data.getContributionsForDate(cell.date);
-      final level = _getLevel(count);
+      final level = HeatmapRenderer._getLevel(count);
       final cellColor = AppConstants.isValidContributionLevel(level)
           ? heatmapLevels[level]
           : heatmapLevels[0];
@@ -1358,25 +1340,6 @@ class MonthHeatmapRenderer {
     }
   }
 
-  static String _headerTextForDate(DateTime date) {
-    final months = [
-      'JANUARY',
-      'FEBRUARY',
-      'MARCH',
-      'APRIL',
-      'MAY',
-      'JUNE',
-      'JULY',
-      'AUGUST',
-      'SEPTEMBER',
-      'OCTOBER',
-      'NOVEMBER',
-      'DECEMBER'
-    ];
-    final monthName = months[date.month - 1];
-    return "$monthName ${date.year}";
-  }
-
   static void _drawError(
       Canvas canvas, Size size, WallpaperConfig config, double pixelRatio) {
     final effectiveScale = config.scale * pixelRatio;
@@ -1398,14 +1361,6 @@ class MonthHeatmapRenderer {
           (size.width - painter.width) / 2, (size.height - painter.height) / 2),
     );
     painter.dispose();
-  }
-
-  static int _getLevel(int count) {
-    if (count == 0) return 0;
-    if (count <= 3) return 1;
-    if (count <= 6) return 2;
-    if (count <= 9) return 3;
-    return 4;
   }
 
   static void clearCaches() {
@@ -1533,5 +1488,6 @@ class AppConfig {
   static void dispose() {
     GitHubService.dispose();
     HeatmapRenderer.clearCaches();
+    MonthHeatmapRenderer.clearCaches();
   }
 }
