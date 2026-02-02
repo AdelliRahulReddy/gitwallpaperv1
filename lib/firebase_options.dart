@@ -27,7 +27,7 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'YOUR_API_KEY_HERE',
+    apiKey: 'AIzaSyDD1CVX-40IF7Ac68yMoZ2-ySPaILEjlS0',
     appId: '1:826591895293:android:91505e5ae02eef985d6894',
     messagingSenderId: '826591895293',
     projectId: 'gitwall-d63cc',
@@ -35,7 +35,7 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'YOUR_API_KEY_HERE',
+    apiKey: 'AIzaSyDUOseD3NbhJ8N-QP5l6MGHUxO9iom7F_Q',
     appId: '1:826591895293:web:16c61e38e4818f165d6894',
     messagingSenderId: '826591895293',
     projectId: 'gitwall-d63cc',
@@ -45,25 +45,25 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'YOUR_API_KEY_HERE',
+    apiKey: 'AIzaSyAZinem2-Kr_lviJx8UFILpU9DZWcX1Yng',
     appId: '1:826591895293:ios:b441ed2d57690dcf5d6894',
     messagingSenderId: '826591895293',
     projectId: 'gitwall-d63cc',
     storageBucket: 'gitwall-d63cc.firebasestorage.app',
-    iosBundleId: 'com.rahulreddy.githubwallpaper',
+    iosBundleId: 'com.example.githubWallpaper',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'YOUR_API_KEY_HERE',
+    apiKey: 'AIzaSyAZinem2-Kr_lviJx8UFILpU9DZWcX1Yng',
     appId: '1:826591895293:ios:b441ed2d57690dcf5d6894',
     messagingSenderId: '826591895293',
     projectId: 'gitwall-d63cc',
     storageBucket: 'gitwall-d63cc.firebasestorage.app',
-    iosBundleId: 'com.rahulreddy.githubwallpaper',
+    iosBundleId: 'com.example.githubWallpaper',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'YOUR_API_KEY_HERE',
+    apiKey: 'AIzaSyDUOseD3NbhJ8N-QP5l6MGHUxO9iom7F_Q',
     appId: '1:826591895293:web:122a427146b7437f5d6894',
     messagingSenderId: '826591895293',
     projectId: 'gitwall-d63cc',
@@ -71,4 +71,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'gitwall-d63cc.firebasestorage.app',
     measurementId: 'G-SF2V3498F1',
   );
+
 }

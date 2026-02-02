@@ -11,15 +11,15 @@ admin.initializeApp();
 // Schedule: Every 5 minutes
 // Timezone: UTC
 exports.triggerDailyUpdate = functions.pubsub
-    .schedule("every 5 minutes")
+    .schedule("every 15 minutes")
     .timeZone("UTC")
     .onRun(async (context) => {
         console.log("⏰ Daily Update Triggered");
 
-        // Build message payload
+        // Build message payload (type must match app handler: "refresh" or "daily_refresh")
         const message = {
             data: {
-                type: "daily_refresh",
+                type: "refresh",
                 timestamp: new Date().toISOString(),
             },
             android: {

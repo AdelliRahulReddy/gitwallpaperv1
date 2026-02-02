@@ -1,15 +1,12 @@
 // ══════════════════════════════════════════════════════════════════════════
-// 🔧 SERVICES - All app services consolidated
-// ══════════════════════════════════════════════════════════════════════════
-// This file contains: GitHub API, Wallpaper Generation, Storage, Utils
-// Simplified for easy understanding and debugging
+// 🔧 SERVICES - Production Ready
 // ══════════════════════════════════════════════════════════════════════════
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:async';
 import 'dart:ui' as ui;
-import 'package:flutter/foundation.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -19,364 +16,564 @@ import 'package:path_provider/path_provider.dart';
 import 'package:wallpaper_manager_plus/wallpaper_manager_plus.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:intl/intl.dart' as intl;
+import 'package:synchronized/synchronized.dart';
 
 import 'models.dart';
+import 'app_constants.dart';
+import 'graph_layout.dart';
 import 'firebase_options.dart';
+import 'theme.dart';
+import 'utils.dart';
+
+import 'exceptions.dart';
 
 // ══════════════════════════════════════════════════════════════════════════
-// 🌐 GITHUB SERVICE - Fetches contribution data from GitHub API
+// 🌐 GITHUB SERVICE
 // ══════════════════════════════════════════════════════════════════════════
 
+/// Service for fetching GitHub contribution data
 class GitHubService {
-  static final http.Client _client = http.Client();
+  static http.Client _client = http.Client();
+  static const String _graphqlEndpoint = 'https://api.github.com/graphql';
 
-  /// Fetch GitHub contributions for the current year
+  static void setHttpClient(http.Client client) {
+    _client = client;
+  }
+
   static Future<CachedContributionData> fetchContributions({
     required String username,
     required String token,
   }) async {
     try {
       final response = await _makeRequest(username, token);
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode != 200) {
+        throw GitHubException.fromResponse(response.statusCode, response.body);
+      }
+
+      late final Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (e) {
+        throw GitHubException(
+          'Invalid API response format',
+          statusCode: response.statusCode,
+          details: response.body,
+        );
+      }
 
       _validateResponse(response, data, username);
-
       return _parseResponse(data, username);
+    } on SocketException {
+      throw NetworkException();
+    } on TimeoutException {
+      throw NetworkException('Request timed out');
     } catch (e) {
-      debugPrint('❌ GitHub API Error: $e');
       rethrow;
     }
   }
 
+  /// Make GraphQL API request
   static Future<http.Response> _makeRequest(
-      String username, String token) async {
-    final now = DateTime.now().toUtc();
-    final from = DateTime.utc(now.year, 1, 1).toIso8601String();
+    String username,
+    String token,
+  ) async {
+    final now = AppDateUtils.nowUtc;
     final to = now.toIso8601String();
+    final from = now
+        .subtract(Duration(days: AppConstants.githubDataFetchDays))
+        .toIso8601String();
 
     return await _client
         .post(
-          Uri.parse('https://api.github.com/graphql'),
+          Uri.parse(_graphqlEndpoint),
           headers: {
-            'Authorization': 'Bearer $token',
+            'Authorization': 'Bearer ${token.trim()}',
+            'User-Agent': AppStrings.appName,
+            'Accept': 'application/json',
             'Content-Type': 'application/json',
           },
           body: jsonEncode({
-            'query': '''
-          query(\$login: String!, \$from: DateTime!, \$to: DateTime!) {
-            user(login: \$login) {
-              contributionsCollection(from: \$from, to: \$to) {
-                contributionCalendar {
-                  totalContributions
-                  weeks {
-                    contributionDays {
-                      date
-                      contributionCount
-                      contributionLevel
-                    }
-                  }
-                }
+            'query': _contributionQuery,
+            'variables': {'login': username.trim(), 'from': from, 'to': to},
+          }),
+        )
+        .timeout(AppConstants.apiTimeout);
+  }
+
+  /// GraphQL query for contribution data
+  static const String _contributionQuery = '''
+    query(\$login: String!, \$from: DateTime!, \$to: DateTime!) {
+      user(login: \$login) {
+        contributionsCollection(from: \$from, to: \$to) {
+          contributionCalendar {
+            totalContributions
+            weeks {
+              contributionDays {
+                date
+                contributionCount
+                contributionLevel
               }
             }
           }
-        ''',
-            'variables': {'login': username, 'from': from, 'to': to},
-          }),
-        )
-        .timeout(const Duration(seconds: 30));
-  }
+        }
+      }
+    }
+  ''';
 
+  /// Validate API response
   static void _validateResponse(
     http.Response response,
     Map<String, dynamic> data,
     String username,
   ) {
+    // Check HTTP status code with custom exceptions
     if (response.statusCode != 200) {
-      throw Exception('GitHub API error: ${response.statusCode}');
+      throw GitHubException.fromResponse(response.statusCode, response.body);
     }
 
+    // Check for GraphQL errors
     if (data['errors'] != null) {
       final errors = data['errors'] as List;
-      throw Exception('GraphQL error: ${errors.first['message']}');
+      final errorMsg = errors.first['message'] ?? 'Unknown GraphQL error';
+      throw GitHubException(errorMsg);
     }
 
-    if (data['data']?['user']?['contributionsCollection'] == null) {
-      throw Exception('No contributions data found for $username');
+    // Validate response structure
+    if (data['data'] == null) {
+      throw GitHubException('Invalid API response: missing data');
+    }
+
+    if (data['data']?['user'] == null) {
+      throw UserNotFoundException();
     }
   }
 
+  /// Parse API response to CachedContributionData
   static CachedContributionData _parseResponse(
     Map<String, dynamic> json,
     String username,
   ) {
-    final collection = json['data']['user']['contributionsCollection'];
-    final calendar = collection['contributionCalendar'] as Map<String, dynamic>;
-    final weeksJson = calendar['weeks'] as List;
-    final totalContributions = calendar['totalContributions'] as int;
+    try {
+      final data = json['data'];
+      final user = data['user'];
+      final collection = user['contributionsCollection'];
+      final calendar =
+          collection['contributionCalendar'] as Map<String, dynamic>;
+      final weeksJson = calendar['weeks'] as List<dynamic>;
+      final apiTotalContributions = calendar['totalContributions'] as int;
 
-    // Flatten all days
-    final allDays = <ContributionDay>[];
-    for (var week in weeksJson) {
-      final daysJson = week['contributionDays'] as List;
-      for (var day in daysJson) {
-        allDays.add(ContributionDay(
-          date: DateTime.parse("${day['date']}T00:00:00Z"),
-          contributionCount: day['contributionCount'] as int,
-          contributionLevel: day['contributionLevel'] as String?,
-        ));
-      }
-    }
-
-    // Calculate stats
-    allDays.sort((a, b) => a.date.compareTo(b.date));
-    int currentStreak = 0, longestStreak = 0, todayCommits = 0;
-    int tempStreak = 0;
-    DateTime? lastActiveDate;
-    final today = DateTime.now();
-
-    for (var day in allDays) {
-      if (day.date.day == today.day && day.date.month == today.month) {
-        todayCommits = day.contributionCount;
-      }
-
-      if (day.contributionCount > 0) {
-        if (lastActiveDate != null) {
-          final daysSince = day.date.difference(lastActiveDate).inDays;
-          if (daysSince == 1) {
-            tempStreak++;
-          } else if (daysSince > 1) {
-            if (tempStreak > longestStreak) longestStreak = tempStreak;
-            tempStreak = 1;
+      // Parse all contribution days
+      final allDays = <ContributionDay>[];
+      for (var week in weeksJson) {
+        final daysJson = week['contributionDays'] as List<dynamic>;
+        for (var dayJson in daysJson) {
+          try {
+            allDays.add(
+              ContributionDay.fromJson(dayJson as Map<String, dynamic>),
+            );
+          } catch (e) {
+            continue;
           }
-        } else {
-          tempStreak = 1;
         }
-        lastActiveDate = day.date;
       }
+
+      final computedTotal = allDays.fold<int>(
+        0,
+        (sum, d) => sum + d.contributionCount,
+      );
+
+      return CachedContributionData(
+        username: username.trim(),
+        totalContributions: computedTotal == apiTotalContributions
+            ? apiTotalContributions
+            : computedTotal,
+        days: allDays,
+        lastUpdated: AppDateUtils.nowUtc,
+      );
+    } catch (e) {
+      throw GitHubException('Failed to parse API response: $e');
     }
-
-    if (tempStreak > longestStreak) longestStreak = tempStreak;
-    if (lastActiveDate != null) {
-      final daysSince = today.difference(lastActiveDate).inDays;
-      currentStreak = daysSince <= 1 ? tempStreak : 0;
-    }
-
-    // Filter for current month
-    final currentMonthDays = allDays
-        .where((d) => d.date.month == today.month && d.date.year == today.year)
-        .toList();
-
-    final dailyContributions = <int, int>{};
-    for (var day in currentMonthDays) {
-      dailyContributions[day.date.day] = day.contributionCount;
-    }
-
-    return CachedContributionData(
-      username: username,
-      totalContributions: totalContributions,
-      currentStreak: currentStreak,
-      longestStreak: longestStreak,
-      todayCommits: todayCommits,
-      days: currentMonthDays,
-      dailyContributions: dailyContributions,
-      lastUpdated: DateTime.now(),
-    );
   }
 
-  /// Validate GitHub token format
+  /// Validate token format (basic format check)
   static bool isValidTokenFormat(String token) {
     final trimmed = token.trim();
-    if (trimmed.startsWith('ghp_')) {
-      return RegExp(r'^ghp_[a-zA-Z0-9]{36}$').hasMatch(trimmed);
-    } else if (trimmed.startsWith('github_pat_')) {
-      return RegExp(r'^github_pat_[a-zA-Z0-9_]{50,}$').hasMatch(trimmed);
+    if (trimmed.isEmpty) return false;
+
+    // Classic personal access token (ghp_)
+    if (RegExp(r'^ghp_[a-zA-Z0-9]{36}$').hasMatch(trimmed)) {
+      return true;
     }
+
+    // Fine-grained personal access token (github_pat_)
+    if (RegExp(r'^github_pat_[a-zA-Z0-9_]{50,}$').hasMatch(trimmed)) {
+      return true;
+    }
+
+    // OAuth token (40 hex characters)
+    if (RegExp(r'^[a-f0-9]{40}$').hasMatch(trimmed)) {
+      return true;
+    }
+
     return false;
+  }
+
+  /// Validate token by making actual API call
+  static Future<bool> validateToken(String username, String token) async {
+    try {
+      await fetchContributions(username: username, token: token);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Dispose resources
+  static void dispose() {
+    _client.close();
   }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// 🖼️ WALLPAPER SERVICE - Generates and sets wallpapers
+// 🖼️ WALLPAPER SERVICE
 // ══════════════════════════════════════════════════════════════════════════
 
-class WallpaperService {
-  static bool _isGenerating = false;
+/// Target screen for wallpaper
+enum WallpaperTarget {
+  home,
+  lock,
+  both;
 
-  /// Generate wallpaper image and set it as device wallpaper
+  /// Convert to WallpaperManagerPlus constant
+  int toManagerConstant() {
+    switch (this) {
+      case WallpaperTarget.home:
+        return WallpaperManagerPlus.homeScreen;
+      case WallpaperTarget.lock:
+        return WallpaperManagerPlus.lockScreen;
+      case WallpaperTarget.both:
+        return WallpaperManagerPlus.bothScreens;
+    }
+  }
+}
+
+@immutable
+class DeviceMetrics {
+  final double width;
+  final double height;
+  final double pixelRatio;
+  final EdgeInsets safeInsets;
+  final String? model;
+
+  const DeviceMetrics({
+    required this.width,
+    required this.height,
+    required this.pixelRatio,
+    required this.safeInsets,
+    required this.model,
+  });
+
+  double get aspectRatio => height == 0 ? 0 : height / width;
+}
+
+@immutable
+class DevicePlacementInsets {
+  final double top;
+  final double bottom;
+  final double left;
+  final double right;
+
+  const DevicePlacementInsets({
+    required this.top,
+    required this.bottom,
+    required this.left,
+    required this.right,
+  });
+}
+
+class DeviceCompatibilityChecker {
+  static DeviceMetrics? metricsFromStorage() {
+    final dims = StorageService.getDimensions();
+    if (dims == null) return null;
+    return DeviceMetrics(
+      width: dims['width']!,
+      height: dims['height']!,
+      pixelRatio: dims['pixelRatio']!,
+      safeInsets: StorageService.getSafeInsets(),
+      model: StorageService.getDeviceModel(),
+    );
+  }
+
+  static WallpaperConfig applyPlacement({
+    required WallpaperConfig base,
+    required WallpaperTarget target,
+    DeviceMetrics? metrics,
+  }) {
+    final m = metrics ?? metricsFromStorage();
+    if (m == null) return base;
+
+    final placement = _computePlacementInsets(target: target, metrics: m);
+    final nextPaddingTop =
+        base.paddingTop > placement.top ? base.paddingTop : placement.top;
+    final nextPaddingBottom = base.paddingBottom > placement.bottom
+        ? base.paddingBottom
+        : placement.bottom;
+    final nextPaddingLeft =
+        base.paddingLeft > placement.left ? base.paddingLeft : placement.left;
+    final nextPaddingRight = base.paddingRight > placement.right
+        ? base.paddingRight
+        : placement.right;
+
+    return base.copyWith(
+      paddingTop: nextPaddingTop,
+      paddingBottom: nextPaddingBottom,
+      paddingLeft: nextPaddingLeft,
+      paddingRight: nextPaddingRight,
+    );
+  }
+
+  static DevicePlacementInsets _computePlacementInsets({
+    required WallpaperTarget target,
+    required DeviceMetrics metrics,
+  }) {
+    // 100% Unified: Every target (Home, Lock, Both) uses the same balanced placement
+    // to ensure 100% consistency across the entire device experience.
+    final clockAreaBuffer = metrics.safeInsets.top + 120.0;
+    final horizontalBuffer = metrics.safeInsets.left + 32.0;
+
+    return DevicePlacementInsets(
+      top: clockAreaBuffer,
+      bottom: clockAreaBuffer, // Balanced for perfect vertical centering
+      left: horizontalBuffer,
+      right: horizontalBuffer,
+    );
+  }
+
+  static double _clampDouble(double v, double min, double max) {
+    if (v < min) return min;
+    if (v > max) return max;
+    return v;
+  }
+}
+
+/// Service for generating and setting wallpapers
+class WallpaperService {
+  static final _lock = Lock();
+  static final _updateLock = Lock();
+
+  /// Generate wallpaper image and set it
   static Future<String> generateAndSetWallpaper({
     required CachedContributionData data,
     required WallpaperConfig config,
-    String target = 'both',
+    WallpaperTarget target = WallpaperTarget.both,
+    ValueChanged<double>? onProgress,
   }) async {
-    if (_isGenerating)
-      throw Exception('Wallpaper generation already in progress');
+    return await _lock.synchronized(() async {
+      try {
+        onProgress?.call(0.1);
 
-    _isGenerating = true;
-    try {
-      debugPrint('🖼️ Generating wallpaper...');
+        // Generate image
+        final imageBytes = await _generateWallpaperImage(data, config, target);
+        onProgress?.call(0.6);
 
-      // Step 1: Generate image
-      final imageBytes = await _generateWallpaperImage(data, config);
+        // Save to file
+        final filePath = await _saveToFile(imageBytes);
+        onProgress?.call(0.8);
 
-      // Step 2: Save to file
-      final filePath = await _saveToFile(imageBytes);
-      debugPrint('💾 Saved to: $filePath');
-
-      // Step 3: Set as wallpaper (Android only)
-      if (Platform.isAndroid) {
-        if (target == 'both') {
-          await _setWallpaper(filePath, 'home');
-          await _setWallpaper(filePath, 'lock');
-        } else {
-          await _setWallpaper(filePath, target);
+        // Set as wallpaper on Android
+        if (Platform.isAndroid) {
+          await WallpaperManagerPlus().setWallpaper(
+            File(filePath),
+            target.toManagerConstant(),
+          );
         }
-        debugPrint('✅ Wallpaper set successfully');
-      }
 
-      return filePath;
-    } finally {
-      _isGenerating = false;
-    }
+        onProgress?.call(1.0);
+        return filePath;
+      } catch (e) {
+        rethrow;
+      }
+    });
   }
 
+  /// Generate wallpaper image as bytes
   static Future<Uint8List> _generateWallpaperImage(
     CachedContributionData data,
     WallpaperConfig config,
+    WallpaperTarget target,
   ) async {
-    double width, height, pixelRatio;
+    // Get screen dimensions
+    double width = AppConstants.defaultWallpaperWidth;
+    double height = AppConstants.defaultWallpaperHeight;
+    double pixelRatio = AppConstants.defaultPixelRatio;
 
-    if (AppConfig.isInitialized) {
-      width = AppConfig.wallpaperWidth;
-      height = AppConfig.wallpaperHeight;
-      pixelRatio = AppConfig.pixelRatio;
-    } else {
-      // Background Mode: Try to load from storage
-      final dims = StorageService.getDimensions();
-      if (dims != null) {
-        width = dims['width']!;
-        height = dims['height']!;
-        pixelRatio = dims['pixelRatio']!;
-        debugPrint(
-            '📱 Loaded dimensions from storage: ${width.toInt()}x${height.toInt()}');
-      } else {
-        // Fallback: Default to standard 1080p
-        width = 1080.0;
-        height = 1920.0;
-        pixelRatio = 1.0;
-        debugPrint('⚠️ No dimensions found, using fallback 1080p');
+    final dims = StorageService.getDimensions();
+    if (dims != null) {
+      width = dims['width']!;
+      height = dims['height']!;
+      pixelRatio = dims['pixelRatio']!;
+    }
+
+    if (Platform.isAndroid &&
+        (target == WallpaperTarget.home || target == WallpaperTarget.both)) {
+      final desired = StorageService.getDesiredWallpaperSize();
+      if (desired != null) {
+        width = desired['width']!;
+        height = desired['height']!;
       }
     }
 
-    final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, width, height));
+    final physicalWidth = (width * pixelRatio).round();
+    final physicalHeight = (height * pixelRatio).round();
 
-    // Render heatmap
-    HeatmapRenderer.render(
+    // Create canvas
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(
+      recorder,
+      Rect.fromLTWH(0, 0, physicalWidth.toDouble(), physicalHeight.toDouble()),
+    );
+    canvas.scale(pixelRatio, pixelRatio);
+
+    final effectiveConfig = DeviceCompatibilityChecker.applyPlacement(
+      base: config,
+      target: target,
+    );
+
+    // 100% Unified: Standardize on MonthHeatmapRenderer for all targets
+    // as requested by user ("ALL SHOULD SHOULD LOOK SAME LIKE LOCK SCREEN")
+    MonthHeatmapRenderer.render(
       canvas: canvas,
       size: Size(width, height),
       data: data,
-      config: config,
-      pixelRatio: pixelRatio,
+      config: effectiveConfig,
+      pixelRatio: 1.0,
     );
 
+    // Convert to image
     final picture = recorder.endRecording();
-    final image = await picture.toImage(width.toInt(), height.toInt());
+    final image = await picture.toImage(physicalWidth, physicalHeight);
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
 
+    // Dispose resources
     image.dispose();
     picture.dispose();
 
-    if (byteData == null) throw Exception('Failed to export image');
+    if (byteData == null) {
+      throw Exception('Failed to export image bytes');
+    }
+
     return byteData.buffer.asUint8List();
   }
 
+  /// Save image bytes to temporary file
   static Future<String> _saveToFile(Uint8List bytes) async {
     final directory = await getTemporaryDirectory();
+
+    // Clean up old wallpaper files
+    try {
+      final oldFiles = directory
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.contains('github_wallpaper'));
+      for (var file in oldFiles) {
+        try {
+          await file.delete();
+        } catch (e) {
+          // Ignore individual file deletion errors
+        }
+      }
+    } catch (e) {
+      // Ignore directory listing errors
+    }
+
+    // Save new file with timestamp
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final filePath = '${directory.path}/github_wallpaper_$timestamp.png';
-
-    final file = File(filePath);
-    await file.writeAsBytes(bytes, flush: true);
+    await File(filePath).writeAsBytes(bytes, flush: true);
 
     return filePath;
   }
 
-  static Future<void> _setWallpaper(String filePath, String target) async {
-    int location;
-    switch (target) {
-      case 'home':
-        location = WallpaperManagerPlus.homeScreen;
-        break;
-      case 'lock':
-        location = WallpaperManagerPlus.lockScreen;
-        break;
-      default:
-        location = WallpaperManagerPlus.bothScreens;
-    }
-
-    final file = File(filePath);
-    if (!await file.exists()) throw Exception('Wallpaper file not found');
-
-    await WallpaperManagerPlus().setWallpaper(file, location);
-  }
-
-  /// 🔄 Perform the full update process (Fetch -> Generate -> Set)
-  /// Used by Background Service and Manual Debug
+  /// Perform background wallpaper update
   static Future<bool> performBackgroundUpdate({bool isIsolate = false}) async {
-    try {
-      debugPrint("🔄 Starting background update (Isolate: $isIsolate)...");
-
-      if (isIsolate) {
-        WidgetsFlutterBinding.ensureInitialized();
-
-        // ✅ FIX: Check if Firebase is already initialized
-        try {
+    return await _updateLock.synchronized(() async {
+      try {
+        if (isIsolate) {
+          WidgetsFlutterBinding.ensureInitialized();
           if (Firebase.apps.isEmpty) {
             await Firebase.initializeApp(
               options: DefaultFirebaseOptions.currentPlatform,
             );
-            debugPrint("✅ Firebase initialized in isolate");
-          } else {
-            debugPrint("✅ Firebase already initialized");
           }
-        } catch (e) {
-          debugPrint('⚠️ Firebase init warning: $e');
+          await StorageService.init();
         }
 
-        await StorageService.init();
-      }
+        // Respect Auto Update setting (skip if disabled)
+        if (!StorageService.getAutoUpdate()) return false;
 
-      final username = StorageService.getUsername();
-      final token = await StorageService.getToken();
+        final lastUpdate = StorageService.getLastUpdate();
+        if (lastUpdate != null) {
+          final diff = DateTime.now().difference(lastUpdate);
+          if (diff.inMinutes < 15) return false;
+        }
 
-      if (username == null || token == null) {
-        debugPrint("⚠️ No credentials found, skipping update.");
+        // Check connectivity first
+        if (!await _hasConnectivity()) return false;
+
+        // Get credentials
+        final username = StorageService.getUsername();
+        final token = await StorageService.getToken();
+
+        if (username == null || token == null) {
+          return false;
+        }
+
+        // Fetch fresh data
+        CachedContributionData data;
+        try {
+          data = await GitHubService.fetchContributions(
+            username: username,
+            token: token,
+          );
+          await StorageService.setCachedData(data);
+          await StorageService.setLastUpdate(AppDateUtils.nowUtc);
+        } catch (e) {
+          final cached = StorageService.getCachedData();
+          if (cached == null) return false;
+          data = cached;
+        }
+
+        // Generate and set wallpaper
+        final config = StorageService.getWallpaperConfig();
+        await generateAndSetWallpaper(
+          data: data,
+          config: config,
+        );
+
+        return true;
+      } catch (e) {
         return false;
       }
+    });
+  }
 
-      // Fetch
-      final data = await GitHubService.fetchContributions(
-          username: username, token: token);
-      await StorageService.setCachedData(data);
-
-      // Config
-      final config = StorageService.getWallpaperConfig();
-
-      await generateAndSetWallpaper(data: data, config: config);
-      debugPrint("✅ Background update successful!");
-      return true;
+  /// Check internet connectivity
+  static Future<bool> _hasConnectivity() async {
+    try {
+      final result = await InternetAddress.lookup('api.github.com')
+          .timeout(const Duration(seconds: 5));
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
     } catch (e) {
-      debugPrint("❌ Background update failed: $e");
       return false;
     }
   }
-} // ← THIS CLOSING BRACE CLOSES WallpaperService CLASS!
+}
 
 // ══════════════════════════════════════════════════════════════════════════
-// 💾 STORAGE SERVICE - Local data persistence
+// 💾 STORAGE SERVICE
 // ══════════════════════════════════════════════════════════════════════════
 
+/// Service for persistent data storage
 class StorageService {
   static SharedPreferences? _prefs;
   static const _secureStorage = FlutterSecureStorage(
@@ -385,123 +582,300 @@ class StorageService {
 
   /// Initialize storage
   static Future<void> init() async {
+    if (_prefs != null) return;
     _prefs = await SharedPreferences.getInstance();
-    debugPrint('✅ Storage initialized');
   }
 
+  /// Get SharedPreferences instance
   static SharedPreferences get _p {
-    if (_prefs == null) throw Exception('Storage not initialized');
+    if (_prefs == null) {
+      throw StateError(
+        'StorageService.init() must be called before accessing storage',
+      );
+    }
     return _prefs!;
   }
 
-  // === Token (Secure) ===
+  // ══════════════════════════════════════════════════════════════════════
+  // TOKEN (Secure Storage)
+  // ══════════════════════════════════════════════════════════════════════
+
+  /// Save GitHub token securely
   static Future<void> setToken(String token) async {
-    await _secureStorage.write(key: 'github_token', value: token.trim());
+    final trimmed = token.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError('Token cannot be empty');
+    }
+    await _secureStorage.write(
+      key: AppConstants.keyToken,
+      value: trimmed,
+    );
   }
 
+  /// Retrieve GitHub token
   static Future<String?> getToken() async {
-    return await _secureStorage.read(key: 'github_token');
+    try {
+      final token = await _secureStorage.read(key: AppConstants.keyToken);
+      return token?.trim();
+    } on PlatformException catch (e) {
+      // Only delete if storage is corrupted
+      if (e.code == 'CORRUPTED' || e.code == 'FAILED_TO_DECRYPT') {
+        await _secureStorage.delete(key: AppConstants.keyToken);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
   }
 
+  /// Delete GitHub token
+  static Future<void> deleteToken() async {
+    await _secureStorage.delete(key: AppConstants.keyToken);
+  }
+
+  /// Check if token exists
   static Future<bool> hasToken() async {
     final token = await getToken();
     return token != null && token.isNotEmpty;
   }
 
-  static Future<void> deleteToken() async {
-    await _secureStorage.delete(key: 'github_token');
-  }
+  // ══════════════════════════════════════════════════════════════════════
+  // USER DATA
+  // ══════════════════════════════════════════════════════════════════════
 
-  // === Username ===
+  /// Save GitHub username
   static Future<void> setUsername(String username) async {
-    await _p.setString('username', username.trim());
+    final trimmed = username.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError('Username cannot be empty');
+    }
+    // Basic validation
+    if (!RegExp(r'^[a-zA-Z0-9]([a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$')
+        .hasMatch(trimmed)) {
+      throw ArgumentError('Invalid GitHub username format');
+    }
+    await _p.setString(AppConstants.keyUsername, trimmed);
   }
 
-  static String? getUsername() => _p.getString('username');
+  /// Get GitHub username
+  static String? getUsername() {
+    return _p.getString(AppConstants.keyUsername);
+  }
 
-  // === Cached Data ===
+  // ══════════════════════════════════════════════════════════════════════
+  // CACHED DATA
+  // ══════════════════════════════════════════════════════════════════════
+
+  /// Save cached contribution data
   static Future<void> setCachedData(CachedContributionData data) async {
-    await _p.setString('cached_data', jsonEncode(data.toJson()));
+    await _p.setString(
+      AppConstants.keyCachedData,
+      jsonEncode(data.toJson()),
+    );
   }
 
+  /// Get cached contribution data
   static CachedContributionData? getCachedData() {
-    final json = _p.getString('cached_data');
-    if (json == null) return null;
-    return CachedContributionData.fromJson(jsonDecode(json));
+    try {
+      final json = _p.getString(AppConstants.keyCachedData);
+      if (json == null) return null;
+      return CachedContributionData.fromJson(
+        jsonDecode(json) as Map<String, dynamic>,
+      );
+    } catch (e) {
+      return null;
+    }
   }
 
-  // === Wallpaper Config ===
-  static Future<void> saveWallpaperConfig(WallpaperConfig config) async {
-    await _p.setString('wallpaper_config', jsonEncode(config.toJson()));
-  }
-
-  static WallpaperConfig getWallpaperConfig() {
-    final json = _p.getString('wallpaper_config');
-    if (json == null) return WallpaperConfig.defaults();
-    return WallpaperConfig.fromJson(jsonDecode(json));
-  }
-
-  // === Preferences ===
-  static Future<void> setAutoUpdate(bool enabled) async {
-    await _p.setBool('auto_update', enabled);
-  }
-
-  static bool getAutoUpdate() => _p.getBool('auto_update') ?? true;
-
-  static Future<void> setOnboardingComplete(bool complete) async {
-    await _p.setBool('onboarding_complete', complete);
-  }
-
-  static bool isOnboardingComplete() =>
-      _p.getBool('onboarding_complete') ?? false;
-
-  // === Last Update Time ===
-  static Future<void> setLastUpdate(DateTime dateTime) async {
-    await _p.setString('last_update', dateTime.toIso8601String());
-  }
-
-  static DateTime? getLastUpdate() {
-    final str = _p.getString('last_update');
-    if (str == null) return null;
-    return DateTime.tryParse(str);
-  }
-
-  // === Clear Data ===
+  /// Clear cached data
   static Future<void> clearCache() async {
-    await _p.remove('cached_data');
-    await _p.remove('last_update');
+    await _p.remove(AppConstants.keyCachedData);
+    await _p.remove(AppConstants.keyLastUpdate);
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  // WALLPAPER CONFIG
+  // ══════════════════════════════════════════════════════════════════════
+
+  /// Save wallpaper configuration
+  static Future<void> saveWallpaperConfig(WallpaperConfig config) async {
+    await _p.setString(
+      AppConstants.keyWallpaperConfig,
+      jsonEncode(config.toJson()),
+    );
+  }
+
+  /// Get wallpaper configuration
+  static WallpaperConfig getWallpaperConfig() {
+    try {
+      final json = _p.getString(AppConstants.keyWallpaperConfig);
+      if (json == null) return WallpaperConfig.defaults();
+      return WallpaperConfig.fromJson(
+        jsonDecode(json) as Map<String, dynamic>,
+      );
+    } catch (e) {
+      return WallpaperConfig.defaults();
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // SETTINGS
+  // ══════════════════════════════════════════════════════════════════════
+
+  /// Enable/disable auto-update
+  static Future<void> setAutoUpdate(bool enabled) async {
+    await _p.setBool(AppConstants.keyAutoUpdate, enabled);
+  }
+
+  /// Get auto-update setting
+  static bool getAutoUpdate() {
+    return _p.getBool(AppConstants.keyAutoUpdate) ?? true;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // DIMENSIONS
+  // ══════════════════════════════════════════════════════════════════════
+
+  /// Save screen dimensions
+  static Future<void> saveDimensions(
+    double width,
+    double height,
+    double pixelRatio,
+  ) async {
+    await saveDeviceMetrics(
+      width: width,
+      height: height,
+      pixelRatio: pixelRatio,
+      safeInsets: EdgeInsets.zero,
+    );
+  }
+
+  static Future<void> saveDeviceModel(String model) async {
+    final normalized = model.trim();
+    if (normalized.isEmpty) return;
+    await _p.setString(AppConstants.keyDeviceModel, normalized);
+  }
+
+  static String? getDeviceModel() {
+    final raw = _p.getString(AppConstants.keyDeviceModel);
+    final trimmed = raw?.trim();
+    return (trimmed == null || trimmed.isEmpty) ? null : trimmed;
+  }
+
+  static Future<void> saveDeviceMetrics({
+    required double width,
+    required double height,
+    required double pixelRatio,
+    required EdgeInsets safeInsets,
+  }) async {
+    await _p.setDouble(AppConstants.keyDimensionWidth, width);
+    await _p.setDouble(AppConstants.keyDimensionHeight, height);
+    await _p.setDouble(AppConstants.keyDimensionPixelRatio, pixelRatio);
+    await _p.setDouble(AppConstants.keySafeInsetTop, safeInsets.top);
+    await _p.setDouble(AppConstants.keySafeInsetBottom, safeInsets.bottom);
+    await _p.setDouble(AppConstants.keySafeInsetLeft, safeInsets.left);
+    await _p.setDouble(AppConstants.keySafeInsetRight, safeInsets.right);
+  }
+
+  static EdgeInsets getSafeInsets() {
+    final top = _p.getDouble(AppConstants.keySafeInsetTop) ?? 0.0;
+    final bottom = _p.getDouble(AppConstants.keySafeInsetBottom) ?? 0.0;
+    final left = _p.getDouble(AppConstants.keySafeInsetLeft) ?? 0.0;
+    final right = _p.getDouble(AppConstants.keySafeInsetRight) ?? 0.0;
+    return EdgeInsets.fromLTRB(left, top, right, bottom);
+  }
+
+  static Future<void> saveDesiredWallpaperSize({
+    required double width,
+    required double height,
+  }) async {
+    if (width <= 0 || height <= 0) return;
+    await _p.setDouble(AppConstants.keyDesiredWallpaperWidth, width);
+    await _p.setDouble(AppConstants.keyDesiredWallpaperHeight, height);
+  }
+
+  static Map<String, double>? getDesiredWallpaperSize() {
+    final w = _p.getDouble(AppConstants.keyDesiredWallpaperWidth);
+    final h = _p.getDouble(AppConstants.keyDesiredWallpaperHeight);
+    if (w == null || h == null) return null;
+    if (w <= 0 || h <= 0) return null;
+    return {'width': w, 'height': h};
+  }
+
+  /// Get screen dimensions
+  static Map<String, double>? getDimensions() {
+    final w = _p.getDouble(AppConstants.keyDimensionWidth);
+    final h = _p.getDouble(AppConstants.keyDimensionHeight);
+    final pr = _p.getDouble(AppConstants.keyDimensionPixelRatio);
+
+    if (w != null && h != null && pr != null) {
+      var width = w;
+      var height = h;
+      final pixelRatio = pr;
+
+      if (pixelRatio > 1.0 && (width > 2000 || height > 2000)) {
+        final logicalW = width / pixelRatio;
+        final logicalH = height / pixelRatio;
+        if (logicalW >= 300 &&
+            logicalW <= 2000 &&
+            logicalH >= 300 &&
+            logicalH <= 4000) {
+          width = logicalW;
+          height = logicalH;
+        }
+      }
+
+      return {'width': width, 'height': height, 'pixelRatio': pixelRatio};
+    }
+    return null;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // METADATA
+  // ══════════════════════════════════════════════════════════════════════
+
+  /// Save last update timestamp
+  static Future<void> setLastUpdate(DateTime dt) async {
+    await _p.setString(AppConstants.keyLastUpdate, dt.toIso8601String());
+  }
+
+  /// Get last update timestamp
+  static DateTime? getLastUpdate() {
+    final s = _p.getString(AppConstants.keyLastUpdate);
+    return s != null ? DateTime.tryParse(s) : null;
+  }
+
+  /// Set onboarding completion status
+  static Future<void> setOnboardingComplete(bool v) async {
+    await _p.setBool(AppConstants.keyOnboarding, v);
+  }
+
+  /// Check if onboarding is complete
+  static bool isOnboardingComplete() {
+    return _p.getBool(AppConstants.keyOnboarding) ?? false;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // CLEANUP
+  // ══════════════════════════════════════════════════════════════════════
+
+  /// Logout and clear all data
   static Future<void> logout() async {
     await deleteToken();
     await _p.clear();
   }
-
-  // === Screen Dimensions ===
-  static Future<void> saveDimensions(
-      double width, double height, double pixelRatio) async {
-    await _p.setDouble('screen_width', width);
-    await _p.setDouble('screen_height', height);
-    await _p.setDouble('pixel_ratio', pixelRatio);
-  }
-
-  static Map<String, double>? getDimensions() {
-    final w = _p.getDouble('screen_width');
-    final h = _p.getDouble('screen_height');
-    final pr = _p.getDouble('pixel_ratio');
-    if (w != null && h != null && pr != null) {
-      return {'width': w, 'height': h, 'pixelRatio': pr};
-    }
-    return null;
-  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// 🎨 HEATMAP RENDERER - Draws the contribution heatmap
+// 🎨 HEATMAP RENDERER
 // ══════════════════════════════════════════════════════════════════════════
 
+/// Renders GitHub contribution heatmap on canvas
 class HeatmapRenderer {
-  /// Renders the GitHub contribution heatmap to canvas
+  // Cache for reusable objects (TextPainter removed - created/disposed per use)
+  static final Map<String, ui.Radius> _radiusCache = {};
+
+  /// Render heatmap to canvas
   static void render({
     required Canvas canvas,
     required Size size,
@@ -509,269 +883,655 @@ class HeatmapRenderer {
     required WallpaperConfig config,
     double pixelRatio = 1.0,
   }) {
-    // Background
+    // Draw background
     final bgPaint = Paint()
-      ..color = config.isDarkMode
-          ? AppConfig.heatmapDarkBg
-          : AppConfig.heatmapLightBg;
+      ..color = config.isDarkMode ? AppTheme.githubDarkCard : AppTheme.bgWhite;
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
 
-    final now = DateTime.now();
-    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
-    final firstWeekday = DateTime(now.year, now.month, 1).weekday;
+    final availableWidth =
+        size.width - config.paddingLeft - config.paddingRight;
+    final availableHeight =
+        size.height - config.paddingTop - config.paddingBottom;
 
-    final effectiveScale = config.scale * pixelRatio;
-    final boxSize = AppConfig.boxSize * effectiveScale;
-    final cellSize = boxSize + (AppConfig.boxSpacing * effectiveScale);
+    final baseScale = config.autoFitWidth
+        ? GraphLayoutCalculator.fitScale(
+            availableWidth: availableWidth,
+            columns: AppConstants.heatmapWeeks,
+            fillFraction: 0.95,
+          )
+        : config.scale;
 
-    final numWeeks = ((daysInMonth + firstWeekday - 1) / 7).ceil();
-    final gridWidth = numWeeks * cellSize;
-    final gridHeight = 7 * cellSize;
+    final effectiveScale = baseScale * pixelRatio;
+    final boxSize = AppConstants.heatmapBoxSize * effectiveScale;
+    final spacing = AppConstants.heatmapBoxSpacing * effectiveScale;
+    final cellSize = boxSize + spacing;
 
-    final xOffset = (size.width - gridWidth) * config.horizontalPosition;
-    final yOffset = (size.height - gridHeight) * config.verticalPosition;
+    final gridWidth = (AppConstants.heatmapWeeks * cellSize) - spacing;
+    final gridHeight = (AppConstants.heatmapDaysPerWeek * cellSize) - spacing;
 
-    // Draw header
-    _drawHeader(canvas, xOffset, yOffset - 30 * effectiveScale, effectiveScale,
-        config.isDarkMode);
+    // Apply padding and positioning
+    final xStart = config.paddingLeft +
+        ((availableWidth - gridWidth) * config.horizontalPosition);
 
-    // Draw contribution grid
-    _drawGrid(canvas, data, xOffset, yOffset, boxSize, cellSize, firstWeekday,
-        daysInMonth, config);
+    // Calculate date range
+    final endToday = AppDateUtils.nowLocal;
+    final totalDaysGraph = AppConstants.heatmapTotalDays;
+    final startDate = endToday.subtract(Duration(days: totalDaysGraph - 1));
 
-    // Draw quote if present
-    if (config.customQuote.isNotEmpty) {
-      _drawQuote(
-          canvas,
-          config,
-          xOffset,
-          yOffset + gridHeight + 20 * effectiveScale,
-          gridWidth,
-          effectiveScale);
-    }
-  }
+    // Align to start of week (Sunday = 0)
+    final daysToSubtract = startDate.weekday % 7;
+    final graphStartDate = startDate.subtract(Duration(days: daysToSubtract));
 
-  static void _drawHeader(
-      Canvas canvas, double x, double y, double scale, bool isDarkMode) {
-    final textColor = isDarkMode
-        ? AppConfig.heatmapDarkBox.withValues(alpha: 0.8)
-        : AppConfig.heatmapLightBox.withValues(alpha: 0.8);
-
-    final monthName = intl.DateFormat('MMM yyyy').format(DateTime.now());
-    final painter = TextPainter(
-      text: TextSpan(
-        text: monthName,
-        style: TextStyle(
-            color: textColor,
-            fontSize: 16 * scale,
-            fontWeight: FontWeight.bold),
-      ),
+    final headerColor =
+        (config.isDarkMode ? AppTheme.bgLight : AppTheme.textPrimary)
+            .withValues(alpha: 0.8);
+    final headerTextStyle = TextStyle(
+      color: headerColor,
+      fontSize: 16 * effectiveScale,
+      fontWeight: FontWeight.bold,
+    );
+    final headerText = _headerTextForDate(endToday);
+    final headerPainter = TextPainter(
+      text: TextSpan(text: headerText, style: headerTextStyle),
       textDirection: ui.TextDirection.ltr,
-    )..layout();
+    )..layout(maxWidth: gridWidth);
 
-    painter.paint(canvas, Offset(x, y));
-  }
+    final headerGap = (spacing * 3).clamp(spacing, boxSize);
 
-  static void _drawGrid(
-    Canvas canvas,
-    CachedContributionData data,
-    double xOffset,
-    double yOffset,
-    double boxSize,
-    double cellSize,
-    int firstWeekday,
-    int daysInMonth,
-    WallpaperConfig config,
-  ) {
-    final today = DateTime.now().day;
+    double quoteHeight = 0.0;
+    double quoteGap = 0.0;
+    if (config.customQuote.isNotEmpty) {
+      final quoteColor = config.isDarkMode
+          ? AppTheme.textWhite.withValues(alpha: config.quoteOpacity)
+          : AppTheme.textPrimary.withValues(alpha: config.quoteOpacity);
+      final quotePainter = TextPainter(
+        text: TextSpan(
+          text: config.customQuote,
+          style: TextStyle(
+            color: quoteColor,
+            fontSize: config.quoteFontSize * effectiveScale,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+        textDirection: ui.TextDirection.ltr,
+        textAlign: TextAlign.center,
+        maxLines: 3,
+      )..layout(maxWidth: gridWidth);
+      quoteHeight = quotePainter.height;
+      quotePainter.dispose();
+      quoteGap = (spacing * 4).clamp(spacing, boxSize * 1.5);
+    }
+
+    final totalBlockHeight =
+        headerPainter.height + headerGap + gridHeight + quoteGap + quoteHeight;
+    final yStartBlock = config.paddingTop +
+        ((availableHeight - totalBlockHeight) * config.verticalPosition);
+    final yHeader = yStartBlock;
+    final yStart = yHeader + headerPainter.height + headerGap;
+
+    headerPainter.paint(canvas, Offset(xStart, yHeader));
+    headerPainter.dispose();
+
+    // Get theme colors
+    final heatmapLevels = config.isDarkMode
+        ? AppThemeExtension.dark().heatmapLevels
+        : AppThemeExtension.light().heatmapLevels;
+
+    // Prepare paints
     final boxPaint = Paint()..style = PaintingStyle.fill;
     final borderPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..color = AppConfig.todayHighlight;
+      ..strokeWidth = 2 * effectiveScale
+      ..color = AppThemeExtension.light().heatmapTodayHighlight;
 
-    for (int day = 1; day <= daysInMonth; day++) {
-      final dayIndex = day + firstWeekday - 2;
-      final week = dayIndex ~/ 7;
-      final weekday = dayIndex % 7;
+    // Get cached radius
+    final radiusKey = '${config.cornerRadius}_$effectiveScale';
+    final radius = _radiusCache.putIfAbsent(
+      radiusKey,
+      () => Radius.circular(config.cornerRadius * effectiveScale),
+    );
 
-      final x = xOffset + week * cellSize;
-      final y = yOffset + weekday * cellSize;
+    // Render cells
+    final todayDateOnly = AppDateUtils.toDateOnly(endToday);
 
-      final contributions = data.getContributionsForDay(day);
-      final color = _getContributionColor(contributions, config.isDarkMode);
+    for (int col = 0; col < AppConstants.heatmapWeeks; col++) {
+      for (int row = 0; row < AppConstants.heatmapDaysPerWeek; row++) {
+        final cellIndex = (col * 7) + row;
+        final cellDate = graphStartDate.add(Duration(days: cellIndex));
 
-      boxPaint.color = color.withValues(alpha: config.opacity);
-      final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(x, y, boxSize, boxSize),
-        Radius.circular(config.cornerRadius),
-      );
+        // Don't draw future dates
+        if (cellDate.isAfter(endToday)) continue;
 
-      canvas.drawRRect(rect, boxPaint);
+        // Get contribution count and level
+        final count = data.getContributionsForDate(cellDate);
+        final level = _getLevel(count);
 
-      if (day == today) {
-        canvas.drawRRect(rect, borderPaint);
+        // Get color with bounds checking
+        final cellColor = AppConstants.isValidContributionLevel(level)
+            ? heatmapLevels[level]
+            : heatmapLevels[0];
+
+        boxPaint.color = cellColor.withValues(alpha: config.opacity);
+
+        // Calculate position
+        final x = xStart + (col * cellSize);
+        final y = yStart + (row * cellSize);
+
+        final rect = RRect.fromRectAndRadius(
+          Rect.fromLTWH(x, y, boxSize, boxSize),
+          radius,
+        );
+
+        // Draw cell
+        canvas.drawRRect(rect, boxPaint);
+
+        // Highlight today
+        final cellDateOnly = AppDateUtils.toDateOnly(cellDate);
+        if (AppDateUtils.isSameDay(cellDateOnly, todayDateOnly)) {
+          canvas.drawRRect(rect, borderPaint);
+        }
       }
+    }
+
+    // Draw custom quote if present
+    if (config.customQuote.isNotEmpty) {
+      _drawQuote(
+        canvas,
+        config,
+        xStart,
+        yStart + gridHeight + quoteGap,
+        gridWidth,
+        effectiveScale,
+      );
     }
   }
 
-  static void _drawQuote(Canvas canvas, WallpaperConfig config, double x,
-      double y, double width, double scale) {
-    final textColor = config.isDarkMode
-        ? Colors.white.withValues(alpha: config.quoteOpacity)
-        : Colors.black.withValues(alpha: config.quoteOpacity);
+  static String _headerTextForDate(DateTime date) {
+    final months = [
+      'JANUARY',
+      'FEBRUARY',
+      'MARCH',
+      'APRIL',
+      'MAY',
+      'JUNE',
+      'JULY',
+      'AUGUST',
+      'SEPTEMBER',
+      'OCTOBER',
+      'NOVEMBER',
+      'DECEMBER'
+    ];
+    final monthName = months[date.month - 1];
+    return "$monthName ${date.year}";
+  }
+
+  /// Draw custom quote
+  static void _drawQuote(
+    Canvas canvas,
+    WallpaperConfig config,
+    double x,
+    double y,
+    double width,
+    double scale,
+  ) {
+    final color = config.isDarkMode
+        ? AppTheme.textWhite.withValues(alpha: config.quoteOpacity)
+        : AppTheme.textPrimary.withValues(alpha: config.quoteOpacity);
 
     final painter = TextPainter(
       text: TextSpan(
         text: config.customQuote,
         style: TextStyle(
-            color: textColor,
-            fontSize: config.quoteFontSize * scale,
-            fontStyle: FontStyle.italic),
+          color: color,
+          fontSize: config.quoteFontSize * scale,
+          fontStyle: FontStyle.italic,
+        ),
       ),
       textDirection: ui.TextDirection.ltr,
-      maxLines: 2,
       textAlign: TextAlign.center,
+      maxLines: 3,
     )..layout(maxWidth: width);
 
     painter.paint(canvas, Offset(x + (width - painter.width) / 2, y));
+    painter.dispose(); // ✅ Fixed memory leak
   }
 
-  static Color _getContributionColor(int count, bool isDarkMode) {
-    if (isDarkMode) {
-      if (count == 0) return AppConfig.heatmapDarkBox;
-      if (count <= 3) return AppConfig.heatmapDarkLevel1;
-      if (count <= 6) return AppConfig.heatmapDarkLevel2;
-      if (count <= 9) return AppConfig.heatmapDarkLevel3;
-      return AppConfig.heatmapDarkLevel4;
-    } else {
-      if (count == 0) return AppConfig.heatmapLightBox;
-      if (count <= 3) return AppConfig.heatmapLightLevel1;
-      if (count <= 6) return AppConfig.heatmapLightLevel2;
-      if (count <= 9) return AppConfig.heatmapLightLevel3;
-      return AppConfig.heatmapLightLevel4;
+  /// Get contribution level (0-4)
+  static int _getLevel(int count) {
+    if (count == 0) return 0;
+    if (count <= 3) return 1;
+    if (count <= 6) return 2;
+    if (count <= 9) return 3;
+    return 4;
+  }
+
+  /// Clear caches (call on app dispose)
+  static void clearCaches() {
+    _radiusCache.clear();
+  }
+}
+
+class MonthHeatmapCell {
+  final DateTime date;
+  final int dayIndex;
+
+  const MonthHeatmapCell({
+    required this.date,
+    required this.dayIndex,
+  });
+}
+
+class MonthHeatmapRenderer {
+  static final Map<String, ui.Radius> _radiusCache = {};
+
+  static List<MonthHeatmapCell> computeMonthCells({DateTime? referenceDate}) {
+    final ref = referenceDate ?? AppDateUtils.nowLocal;
+    final days = AppDateUtils.daysInMonth(ref.year, ref.month);
+    return List<MonthHeatmapCell>.generate(
+      days,
+      (i) => MonthHeatmapCell(
+          date: DateTime(ref.year, ref.month, i + 1), dayIndex: i),
+    );
+  }
+
+  static void render({
+    required Canvas canvas,
+    required Size size,
+    required CachedContributionData data,
+    required WallpaperConfig config,
+    double pixelRatio = 1.0,
+    DateTime? referenceDate,
+  }) {
+    final bgPaint = Paint()
+      ..color = config.isDarkMode ? AppTheme.githubDarkCard : AppTheme.bgWhite;
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
+
+    final DateTime ref = referenceDate ?? AppDateUtils.nowLocal;
+
+    late final List<MonthHeatmapCell> cells;
+    try {
+      cells = computeMonthCells(referenceDate: ref);
+    } catch (e) {
+      _drawError(canvas, size, config, pixelRatio);
+      return;
+    }
+
+    final availableWidth =
+        size.width - config.paddingLeft - config.paddingRight;
+    final availableHeight =
+        size.height - config.paddingTop - config.paddingBottom;
+
+    final baseScale = config.autoFitWidth
+        ? GraphLayoutCalculator.fitScale(
+            availableWidth: availableWidth,
+            columns: AppConstants.monthGridColumns,
+            fillFraction: 0.95,
+          )
+        : config.scale;
+
+    final effectiveScale = baseScale * pixelRatio;
+    final boxSize = AppConstants.heatmapBoxSize * effectiveScale;
+    final spacing = AppConstants.heatmapBoxSpacing * effectiveScale;
+    final cellSize = boxSize + spacing;
+    final columns = AppConstants.monthGridColumns;
+
+    // 📅 Calculate Calendar Layout (No Hardcoding)
+    final firstOfMonth = DateTime(ref.year, ref.month, 1);
+    final weekdayOffset = firstOfMonth.weekday % 7; // 0=Sun, 1=Mon...6=Sat
+    final totalCells = cells.length + weekdayOffset;
+    final dynamicRows = (totalCells / columns).ceil();
+
+    final gridWidth = (columns * cellSize) - spacing;
+    final gridHeight = (dynamicRows * cellSize) - spacing;
+
+    final xStart = config.paddingLeft +
+        ((availableWidth - gridWidth) * config.horizontalPosition);
+
+    final headerColor =
+        (config.isDarkMode ? AppTheme.bgLight : AppTheme.textPrimary)
+            .withValues(alpha: 0.8);
+    final headerTextStyle = TextStyle(
+      color: headerColor,
+      fontSize: 16 * effectiveScale,
+      fontWeight: FontWeight.bold,
+    );
+    final headerText = _headerTextForDate(ref);
+    final headerPainter = TextPainter(
+      text: TextSpan(text: headerText, style: headerTextStyle),
+      textDirection: ui.TextDirection.ltr,
+    )..layout(maxWidth: gridWidth);
+
+    // 📅 Weekday Labels
+    final dayLabels = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    final dayLabelStyle = TextStyle(
+      color: headerColor.withValues(alpha: 0.6),
+      fontSize: 8 * effectiveScale,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.5,
+    );
+    
+    final dayLabelPainters = dayLabels.map((d) => TextPainter(
+      text: TextSpan(text: d, style: dayLabelStyle),
+      textDirection: ui.TextDirection.ltr,
+      maxLines: 1, // Fix: Prevent wrapping ("Third word goes down")
+    )..layout(maxWidth: boxSize + 4.0)).toList(); // Allow slight overflow if needed, but keep centered
+
+    final headerGap = (spacing * 3).clamp(spacing, boxSize);
+    final labelsRowHeight = 12 * effectiveScale;
+    final labelsGap = spacing * 2;
+
+    double quoteHeight = 0.0;
+    double quoteGap = 0.0;
+    if (config.customQuote.isNotEmpty) {
+      final quoteColor = config.isDarkMode
+          ? AppTheme.textWhite.withValues(alpha: config.quoteOpacity)
+          : AppTheme.textPrimary.withValues(alpha: config.quoteOpacity);
+      final quotePainter = TextPainter(
+        text: TextSpan(
+          text: config.customQuote,
+          style: TextStyle(
+            color: quoteColor,
+            fontSize: config.quoteFontSize * effectiveScale,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+        textDirection: ui.TextDirection.ltr,
+        textAlign: TextAlign.center,
+        maxLines: 3,
+      )..layout(maxWidth: gridWidth);
+      quoteHeight = quotePainter.height;
+      quotePainter.dispose();
+      quoteGap = (spacing * 4).clamp(spacing, boxSize * 1.5);
+    }
+
+    final totalBlockHeight = headerPainter.height +
+        headerGap +
+        labelsRowHeight +
+        labelsGap +
+        gridHeight +
+        quoteGap +
+        quoteHeight;
+
+    final yStartBlock = config.paddingTop +
+        ((availableHeight - totalBlockHeight) * config.verticalPosition);
+    final yHeader = yStartBlock;
+    
+    // Paint Header
+    headerPainter.paint(canvas, Offset(xStart, yHeader));
+
+    // Paint Weekday Labels
+    final yLabels = yHeader + headerPainter.height + headerGap;
+    // Safe to dispose headerPainter now that we have read its height
+    headerPainter.dispose();
+
+    for (int i = 0; i < dayLabelPainters.length; i++) {
+      final p = dayLabelPainters[i];
+      final xLabel = xStart + (i * cellSize) + (boxSize - p.width) / 2;
+      p.paint(canvas, Offset(xLabel, yLabels));
+      p.dispose();
+    }
+
+    final yStart = yLabels + labelsRowHeight + labelsGap;
+
+    final heatmapLevels = config.isDarkMode
+        ? AppThemeExtension.dark().heatmapLevels
+        : AppThemeExtension.light().heatmapLevels;
+
+    final boxPaint = Paint()..style = PaintingStyle.fill;
+    final borderPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = (spacing / 1.5).clamp(1.0, boxSize * 0.2)
+      ..color = AppThemeExtension.light().heatmapTodayHighlight;
+
+    final radiusKey = '${config.cornerRadius}_$effectiveScale';
+    final radius = _radiusCache.putIfAbsent(
+      radiusKey,
+      () => Radius.circular(config.cornerRadius * effectiveScale),
+    );
+
+    final today = AppDateUtils.toDateOnly(AppDateUtils.nowLocal);
+    final canPaintText = boxSize >= 12.0;
+
+    for (final cell in cells) {
+      final i = cell.dayIndex + weekdayOffset; // Apply calendar offset
+      final col = i % columns;
+      final row = i ~/ columns;
+
+      final count = data.getContributionsForDate(cell.date);
+      final level = _getLevel(count);
+      final cellColor = AppConstants.isValidContributionLevel(level)
+          ? heatmapLevels[level]
+          : heatmapLevels[0];
+
+      boxPaint.color = cellColor.withValues(alpha: config.opacity);
+
+      final x = xStart + (col * cellSize);
+      final y = yStart + (row * cellSize);
+
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x, y, boxSize, boxSize),
+        radius,
+      );
+      canvas.drawRRect(rect, boxPaint);
+
+      if (AppDateUtils.isSameDay(AppDateUtils.toDateOnly(cell.date), today)) {
+        canvas.drawRRect(rect, borderPaint);
+      }
+
+      if (canPaintText && count > 0) {
+        final textColor = config.isDarkMode
+            ? AppTheme.textWhite.withValues(alpha: 0.9)
+            : AppTheme.textPrimary.withValues(alpha: 0.85);
+
+        final painter = TextPainter(
+          text: TextSpan(
+            text: '$count',
+            style: TextStyle(
+              color: textColor,
+              fontSize: boxSize * 0.45,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          textDirection: ui.TextDirection.ltr,
+          maxLines: 1,
+          textAlign: TextAlign.center,
+        )..layout(maxWidth: boxSize);
+
+        painter.paint(
+          canvas,
+          Offset(x + (boxSize - painter.width) / 2,
+              y + (boxSize - painter.height) / 2),
+        );
+        painter.dispose();
+      }
+    }
+
+    if (config.customQuote.isNotEmpty) {
+      HeatmapRenderer._drawQuote(
+        canvas,
+        config,
+        xStart,
+        yStart + gridHeight + quoteGap,
+        gridWidth,
+        effectiveScale,
+      );
     }
   }
+
+  static String _headerTextForDate(DateTime date) {
+    final months = [
+      'JANUARY',
+      'FEBRUARY',
+      'MARCH',
+      'APRIL',
+      'MAY',
+      'JUNE',
+      'JULY',
+      'AUGUST',
+      'SEPTEMBER',
+      'OCTOBER',
+      'NOVEMBER',
+      'DECEMBER'
+    ];
+    final monthName = months[date.month - 1];
+    return "$monthName ${date.year}";
+  }
+
+  static void _drawError(
+      Canvas canvas, Size size, WallpaperConfig config, double pixelRatio) {
+    final effectiveScale = config.scale * pixelRatio;
+    final color = config.isDarkMode ? AppTheme.bgLight : AppTheme.textPrimary;
+    final painter = TextPainter(
+      text: TextSpan(
+        text: 'Invalid date',
+        style: TextStyle(
+          color: color.withValues(alpha: 0.8),
+          fontSize: 16 * effectiveScale,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: ui.TextDirection.ltr,
+    )..layout();
+    painter.paint(
+      canvas,
+      Offset(
+          (size.width - painter.width) / 2, (size.height - painter.height) / 2),
+    );
+    painter.dispose();
+  }
+
+  static int _getLevel(int count) {
+    if (count == 0) return 0;
+    if (count <= 3) return 1;
+    if (count <= 6) return 2;
+    if (count <= 9) return 3;
+    return 4;
+  }
+
+  static void clearCaches() {
+    _radiusCache.clear();
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// 📨 FIREBASE MESSAGING - Background wallpaper updates
+// 📨 FCM SERVICE
 // ══════════════════════════════════════════════════════════════════════════
 
-// Top-level function for background message handling
+/// Firebase background message handler
 @pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  debugPrint('🔔 Background update triggered');
-
-  // Call the shared update logic, signaling we are in a background isolate
-  await WallpaperService.performBackgroundUpdate(isIsolate: true);
+Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
+  try {
+    final type = message.data['type'] as String?;
+    if (type == 'refresh' || type == 'daily_refresh') {
+      await WallpaperService.performBackgroundUpdate(isIsolate: true);
+    }
+  } catch (_) {
+    // Background handler cannot propagate errors
+  }
 }
 
+/// Service for Firebase Cloud Messaging
 class FcmService {
+  /// Initialize FCM
   static Future<void> init() async {
-    try {
-      debugPrint('📨 FCM: Starting initialization...');
+    // Set background message handler
+    FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
 
-      // Set background handler
-      FirebaseMessaging.onBackgroundMessage(
-          _firebaseMessagingBackgroundHandler);
-      debugPrint('📨 FCM: Background handler set');
+    // Request permission
+    final settings = await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
 
-      // Request permission
-      final settings = await FirebaseMessaging.instance.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-      debugPrint('📨 FCM: Permission status: ${settings.authorizationStatus}');
-
-      // Get FCM token for debugging
-      final token = await FirebaseMessaging.instance.getToken();
-      debugPrint('📱 FCM Token: ${token?.substring(0, 20)}...');
-
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
       // Subscribe to topic
-      await FirebaseMessaging.instance.subscribeToTopic('daily-updates');
-      debugPrint('📨 FCM: Subscribed to daily-updates topic');
+      await FirebaseMessaging.instance
+          .subscribeToTopic(AppConstants.fcmTopicDailyUpdates);
 
-      // Foreground message handler
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-        debugPrint('📬 Foreground FCM received: ${message.data}');
-        if (message.data['type'] == 'daily_refresh') {
-          debugPrint('🔄 Triggering foreground wallpaper update...');
-          await WallpaperService.performBackgroundUpdate(isIsolate: false);
+      // Handle foreground messages
+      FirebaseMessaging.onMessage.listen((message) async {
+        final type = message.data['type'] as String?;
+        if ((type == 'refresh' || type == 'daily_refresh') &&
+            StorageService.getAutoUpdate()) {
+          await WallpaperService.performBackgroundUpdate();
         }
       });
-
-      debugPrint('✅ FCM initialized (foreground + background)');
-    } catch (e, stackTrace) {
-      debugPrint('❌ FCM initialization error: $e');
-      debugPrint('Stack trace: $stackTrace');
-      rethrow;
     }
   }
-}
 
-// ══════════════════════════════════════════════════════════════════════════
-// 🕒 BACKGROUND SERVICE - Placeholder for future expansion
-// ══════════════════════════════════════════════════════════════════════════
-
-class BackgroundService {
-  static Future<void> init() async {
-    // Currently, updates are handled via FCM 'daily-updates' topic
-    // This class is preserved for future advanced scheduling if needed
-    debugPrint('✅ Background Service (Placeholder) initialized');
+  /// Unsubscribe from all topics
+  static Future<void> unsubscribe() async {
+    await FirebaseMessaging.instance
+        .unsubscribeFromTopic(AppConstants.fcmTopicDailyUpdates);
   }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// ⚙️ APP CONFIG - Constants and configuration
+// 🧩 PLATFORM WALLPAPER
 // ══════════════════════════════════════════════════════════════════════════
 
+@immutable
+class DesiredWallpaperSize {
+  final double width;
+  final double height;
+
+  const DesiredWallpaperSize({required this.width, required this.height});
+}
+
+class PlatformWallpaper {
+  static const MethodChannel _channel =
+      MethodChannel('github_wallpaper/wallpaper');
+
+  static Future<DesiredWallpaperSize?> getDesiredMinimumSize() async {
+    final result =
+        await _channel.invokeMethod<dynamic>('getDesiredMinimumSize');
+    if (result is! Map) return null;
+    final w = result['width'];
+    final h = result['height'];
+    final width = (w is num) ? w.toDouble() : null;
+    final height = (h is num) ? h.toDouble() : null;
+    if (width == null || height == null) return null;
+    if (width <= 0 || height <= 0) return null;
+    return DesiredWallpaperSize(width: width, height: height);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ⚙️ APP CONFIG
+// ══════════════════════════════════════════════════════════════════════════
+
+/// Application configuration helper
 class AppConfig {
-  // Heatmap colors - Dark mode
-  static const Color heatmapDarkBg = Color(0xFF0D1117);
-  static const Color heatmapDarkBox = Color(0xFF161B22);
-  static const Color heatmapDarkLevel1 = Color(0xFF0E4429);
-  static const Color heatmapDarkLevel2 = Color(0xFF006D32);
-  static const Color heatmapDarkLevel3 = Color(0xFF26A641);
-  static const Color heatmapDarkLevel4 = Color(0xFF39D353);
-
-  // Heatmap colors - Light mode
-  static const Color heatmapLightBg = Color(0xFFFFFFFF);
-  static const Color heatmapLightBox = Color(0xFFEBEDF0);
-  static const Color heatmapLightLevel1 = Color(0xFF9BE9A8);
-  static const Color heatmapLightLevel2 = Color(0xFF40C463);
-  static const Color heatmapLightLevel3 = Color(0xFF30A14E);
-  static const Color heatmapLightLevel4 = Color(0xFF216E39);
-
-  static const Color todayHighlight = Color(0xFFFF9500);
-
-  // Heatmap layout
-  static const double boxSize = 15.0;
-  static const double boxSpacing = 3.0;
-
-  // Wallpaper dimensions (initialized from device)
-  static late double wallpaperWidth;
-  static late double wallpaperHeight;
-  static double pixelRatio = 1.0;
-  static bool _isInitialized = false;
-
-  static void initializeFromContext(BuildContext context) {
-    if (_isInitialized) return;
-
+  /// Initialize app configuration from context
+  static Future<void> initializeFromContext(BuildContext context) async {
     final size = MediaQuery.of(context).size;
-    pixelRatio = MediaQuery.of(context).devicePixelRatio;
+    final ratio = MediaQuery.of(context).devicePixelRatio;
+    final safeInsets = MediaQuery.of(context).viewPadding;
 
-    wallpaperWidth = size.width * pixelRatio;
-    wallpaperHeight = size.height * pixelRatio;
-    _isInitialized = true;
+    await StorageService.saveDeviceMetrics(
+      width: size.width,
+      height: size.height,
+      pixelRatio: ratio,
+      safeInsets: safeInsets,
+    );
 
-    debugPrint(
-        '📱 Screen: ${wallpaperWidth.toInt()}x${wallpaperHeight.toInt()}px @ ${pixelRatio}x');
-
-    // Save for background service
-    StorageService.saveDimensions(wallpaperWidth, wallpaperHeight, pixelRatio);
+    if (Platform.isAndroid) {
+      try {
+        final desired = await PlatformWallpaper.getDesiredMinimumSize();
+        if (desired != null) {
+          await StorageService.saveDesiredWallpaperSize(
+            width: desired.width,
+            height: desired.height,
+          );
+        }
+      } catch (_) {}
+    }
   }
 
-  static bool get isInitialized => _isInitialized;
+  /// Dispose all services
+  static void dispose() {
+    GitHubService.dispose();
+    HeatmapRenderer.clearCaches();
+  }
 }

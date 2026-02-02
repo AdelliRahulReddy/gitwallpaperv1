@@ -51,16 +51,6 @@
 -dontwarn androidx.**
 
 # ──────────────────────────────────────────────────────────────────────────
-# 6. HTTP / NETWORKING
-# ──────────────────────────────────────────────────────────────────────────
-
-# OkHttp / Okio (used internally by http package)
--dontwarn okhttp3.**
--dontwarn okio.**
--keep class okhttp3.** { *; }
--keep interface okhttp3.** { *; }
-
-# ──────────────────────────────────────────────────────────────────────────
 # 5. FIREBASE CLOUD MESSAGING (FCM)
 # ──────────────────────────────────────────────────────────────────────────
 
@@ -76,12 +66,28 @@
 -keep class com.google.firebase.messaging.RemoteMessage$Builder { *; }
 
 # ──────────────────────────────────────────────────────────────────────────
-# 7. KOTLIN (If using Kotlin code)
+# 6. HTTP / NETWORKING
+# ──────────────────────────────────────────────────────────────────────────
+
+# OkHttp / Okio (used internally by http package)
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-keep class okhttp3.** { *; }
+-keep interface okhttp3.** { *; }
+
+# ──────────────────────────────────────────────────────────────────────────
+# 7. KOTLIN & COROUTINES
 # ──────────────────────────────────────────────────────────────────────────
 
 -keep class kotlin.** { *; }
 -keep class kotlin.Metadata { *; }
 -dontwarn kotlin.**
+
+# Keep Coroutines (Important for background tasks/plugins)
+-keep class kotlinx.coroutines.** { *; }
+-keepclassmembers class kotlinx.coroutines.** { *; }
+-dontwarn kotlinx.coroutines.**
+
 -keepclassmembers class **$WhenMappings {
     <fields>;
 }
@@ -170,3 +176,10 @@
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
+
+# ──────────────────────────────────────────────────────────────────────────
+# 14. FLUTTER SECURE STORAGE (CRITICAL)
+# ──────────────────────────────────────────────────────────────────────────
+# Prevents KeyStore crash in release mode
+-keep class com.it_nomads.fluttersecurestorage.** { *; }
+-keep interface com.it_nomads.fluttersecurestorage.** { *; }
