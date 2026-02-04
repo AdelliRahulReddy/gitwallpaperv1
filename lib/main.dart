@@ -27,7 +27,9 @@ void main() async {
     debugPrint('Storage initialization failed: $e');
     try {
       await FirebaseCrashlytics.instance.recordError(e, StackTrace.current);
-    } catch (_) {}
+    } catch (crashlyticsError) {
+      debugPrint('Crashlytics logging failed during storage init: $crashlyticsError');
+    }
   }
 
   try {
@@ -42,7 +44,9 @@ void main() async {
     debugPrint('Firebase initialization failed: $e');
     try {
       await FirebaseCrashlytics.instance.recordError(e, StackTrace.current);
-    } catch (_) {}
+    } catch (crashlyticsError) {
+      debugPrint('Crashlytics logging failed during firebase init: $crashlyticsError');
+    }
   }
 
   SystemChrome.setSystemUIOverlayStyle(

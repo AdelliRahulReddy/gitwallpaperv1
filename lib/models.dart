@@ -570,7 +570,7 @@ class WallpaperConfig {
         horizontalPosition:
             _parseDouble(json['horizontalPosition'], 0.5, 0.0, 1.0),
         scale: _parseDouble(
-            json['scale'], AppConstants.defaultWallpaperScale, 0.5, 3.0),
+            json['scale'], AppConstants.defaultWallpaperScale, 0.5, 8.0),
         autoFitWidth: json['autoFitWidth'] as bool? ?? true,
         opacity: _parseDouble(
             json['opacity'], AppConstants.defaultWallpaperOpacity, 0.0, 1.0),

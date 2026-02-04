@@ -348,12 +348,6 @@ class DeviceCompatibilityChecker {
       right: horizontalBuffer,
     );
   }
-
-  static double _clampDouble(double v, double min, double max) {
-    if (v < min) return min;
-    if (v > max) return max;
-    return v;
-  }
 }
 
 /// Service for generating and setting wallpapers
@@ -1376,11 +1370,13 @@ class MonthHeatmapRenderer {
 @pragma('vm:entry-point')
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
   try {
+    debugPrint('FCM Background message received: ${message.messageId}');
     final type = message.data['type'] as String?;
     if (type == 'refresh' || type == 'daily_refresh') {
       await WallpaperService.performBackgroundUpdate(isIsolate: true);
     }
-  } catch (_) {
+  } catch (e) {
+    debugPrint('Background handler failed: $e');
     // Background handler cannot propagate errors
   }
 }
