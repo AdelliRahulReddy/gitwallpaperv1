@@ -3,76 +3,8 @@
 // ══════════════════════════════════════════════════════════════════════════
 
 import 'package:flutter/foundation.dart';
-import 'app_constants.dart';
+import 'utils.dart';
 
-// ══════════════════════════════════════════════════════════════════════════
-// DATE UTILITIES
-// ══════════════════════════════════════════════════════════════════════════
-
-/// Utilities for date handling and manipulation
-class AppDateUtils {
-  AppDateUtils._(); // Private constructor
-
-  /// Get current date/time in UTC
-  static DateTime get nowUtc => DateTime.now().toUtc();
-
-  /// Get current date/time in local timezone
-  static DateTime get nowLocal => DateTime.now();
-
-  /// Convert DateTime to date-only (strips time component)
-  static DateTime toDateOnly(DateTime dt) {
-    return DateTime(dt.year, dt.month, dt.day);
-  }
-
-  /// Format date as ISO date string (YYYY-MM-DD)
-  static String toIsoDateString(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
-
-  /// Create date key for map lookups (YYYY-MM-DD format)
-  static String createDateKey(DateTime date) {
-    return toIsoDateString(date);
-  }
-
-  /// Parse ISO date string to DateTime (date-only)
-  static DateTime? parseIsoDate(String? dateStr) {
-    if (dateStr == null) return null;
-    try {
-      final parsed = DateTime.parse(dateStr);
-      return toDateOnly(parsed);
-    } catch (e) {
-            return null;
-    }
-  }
-
-  /// Check if two dates are the same day (ignoring time)
-  static bool isSameDay(DateTime date1, DateTime date2) {
-    return date1.year == date2.year &&
-        date1.month == date2.month &&
-        date1.day == date2.day;
-  }
-
-  static bool isLeapYear(int year) {
-    if (year <= 0) {
-      throw ArgumentError.value(year, 'year', 'Year must be positive');
-    }
-    if (year % 400 == 0) return true;
-    if (year % 100 == 0) return false;
-    return year % 4 == 0;
-  }
-
-  static int daysInMonth(int year, int month) {
-    if (year <= 0) {
-      throw ArgumentError.value(year, 'year', 'Year must be positive');
-    }
-    if (month < 1 || month > 12) {
-      throw ArgumentError.value(month, 'month', 'Month must be 1-12');
-    }
-    if (month == 2) return isLeapYear(year) ? 29 : 28;
-    if (month == 4 || month == 6 || month == 9 || month == 11) return 30;
-    return 31;
-  }
-}
 
 // ══════════════════════════════════════════════════════════════════════════
 // CONTRIBUTION DAY
@@ -102,16 +34,18 @@ class ContributionDay {
     final parsedDate = AppDateUtils.parseIsoDate(dateStr);
 
     if (parsedDate == null) {
-      // Return empty day instead of corrupting data with wrong date
+      debugPrint('ContributionDay: Invalid date string: $dateStr');
       throw FormatException('Invalid date in ContributionDay JSON: $dateStr');
     }
 
-    final count = json['contributionCount'];
-    final validCount = (count is int && count >= 0) ? count : 0;
+    final countValue = json['contributionCount'];
+    final count = (countValue is num && countValue >= 0) 
+        ? countValue.toInt() 
+        : 0;
 
     return ContributionDay(
       date: parsedDate,
-      contributionCount: validCount,
+      contributionCount: count,
       contributionLevel: json['contributionLevel'] as String?,
     );
   }
@@ -127,19 +61,20 @@ class ContributionDay {
   bool get isActive => contributionCount > 0;
 
   /// Get visual intensity level (0-4) for heatmap rendering
-  ///
-  /// Uses fixed thresholds for consistency:
-  /// - 0: No contributions
-  /// - 1: 1-3 contributions
-  /// - 2: 4-6 contributions
-  /// - 3: 7-9 contributions
-  /// - 4: 10+ contributions
+  /// Prioritizes GitHub's explicit level, falls back to local thresholds
   int get intensityLevel {
-    if (contributionCount == 0) return 0;
-    if (contributionCount <= 3) return 1;
-    if (contributionCount <= 6) return 2;
-    if (contributionCount <= 9) return 3;
-    return 4;
+    if (contributionLevel != null) {
+      switch (contributionLevel) {
+        case 'NONE': return 0;
+        case 'FIRST_QUARTILE': return 1;
+        case 'SECOND_QUARTILE': return 2;
+        case 'THIRD_QUARTILE': return 3;
+        case 'FOURTH_QUARTILE': return 4;
+      }
+    }
+    
+    // Fallback if level string missing
+    return RenderUtils.getContributionLevel(contributionCount);
   }
 
   /// Get date key for map lookups (YYYY-MM-DD format)
@@ -227,92 +162,101 @@ class ContributionStats {
   }
 
   /// Calculate current and longest streaks from contribution days
+  /// 
+  /// Optimized to O(n) in a single pass.
   static Map<String, int> _calculateStreaks(List<ContributionDay> days) {
     if (days.isEmpty) return {'current': 0, 'longest': 0};
 
-    // Sort by date descending (newest first)
-    final sortedDays = List<ContributionDay>.from(days)
-      ..sort((a, b) => b.date.compareTo(a.date));
-
-    int currentStreak = 0;
-    int longestStreak = 0;
-    int tempStreak = 0;
-
-    final today = AppDateUtils.toDateOnly(AppDateUtils.nowLocal);
-    final yesterday = today.subtract(const Duration(days: 1));
-
-    DateTime? expectedDate = today;
-    bool streakActive = true;
-
-    for (final day in sortedDays) {
-      final dayDate = AppDateUtils.toDateOnly(day.date);
-
-      if (expectedDate != null && AppDateUtils.isSameDay(dayDate, expectedDate)) {
-        if (day.isActive) {
-          tempStreak++;
-          if (streakActive) {
-            currentStreak = tempStreak;
-          }
-          longestStreak =
-              tempStreak > longestStreak ? tempStreak : longestStreak;
-          expectedDate = dayDate.subtract(const Duration(days: 1));
-        } else {
-          // Break in streak
-          if (streakActive && !AppDateUtils.isSameDay(dayDate, today)) {
-            streakActive = false;
-            currentStreak = 0;
-          }
-          tempStreak = 0;
-          longestStreak =
-              tempStreak > longestStreak ? tempStreak : longestStreak;
-          expectedDate = dayDate.subtract(const Duration(days: 1));
-        }
-      } else if (expectedDate != null && dayDate.isBefore(expectedDate)) {
-        // Date gap - streak broken
-        if (streakActive) {
-          streakActive = false;
-          currentStreak = 0;
-        }
-        tempStreak = day.isActive ? 1 : 0;
-        longestStreak = tempStreak > longestStreak ? tempStreak : longestStreak;
-        expectedDate = dayDate.subtract(const Duration(days: 1));
+    // 5. List Sorting Optimization: Only sort if necessary
+    bool isSorted = true;
+    for (int i = 0; i < days.length - 1; i++) {
+      if (days[i].date.isAfter(days[i + 1].date)) {
+        isSorted = false;
+        break;
       }
     }
 
-    // If today has no contributions, check if yesterday did (grace period)
-    if (!streakActive && currentStreak == 0) {
-      final yesterdayDay = sortedDays.firstWhere(
-        (d) => AppDateUtils.isSameDay(d.date, yesterday),
-        orElse: () => ContributionDay(date: yesterday, contributionCount: 0),
-      );
-      if (yesterdayDay.isActive) {
-        // Streak is the consecutive days ending yesterday; tempStreak may be 0 here,
-        // so count backwards from yesterday.
-        int graceStreak = 0;
-        DateTime? expect = yesterday;
-        for (final day in sortedDays) {
+    final sortedDays = isSorted 
+        ? days 
+        : (List<ContributionDay>.from(days)..sort((a, b) => a.date.compareTo(b.date)));
+
+    int longestStreakCount = 0;
+    int tempStreak = 0;
+
+    // Use normalized UTC dates to align with GitHub API (P0 Fix)
+    final today = AppDateUtils.toDateOnly(AppDateUtils.nowUtc);
+    DateTime? lastDate;
+
+    for (final day in sortedDays) {
+      final dayDate = AppDateUtils.toDateOnly(day.date);
+      
+      if (day.isActive) {
+        if (lastDate != null && dayDate.difference(lastDate).inDays == 1) {
+          tempStreak++;
+        } else {
+          // Gap in dates or first active day
+          tempStreak = 1;
+        }
+        
+        if (tempStreak > longestStreakCount) {
+          longestStreakCount = tempStreak;
+        }
+        // Fix: Only update lastDate when the day was actually active (P1 Fix)
+        // This prevents inactive days from "bridging" or resetting logic incorrectly
+        lastDate = dayDate;
+      } else {
+        tempStreak = 0;
+      }
+    }
+
+    // Current streak calculation
+    int currentStreakCount = 0;
+    DateTime? lastActiveDay;
+    for (int i = sortedDays.length - 1; i >= 0; i--) {
+      if (sortedDays[i].isActive) {
+        lastActiveDay = AppDateUtils.toDateOnly(sortedDays[i].date);
+        break;
+      }
+    }
+
+    if (lastActiveDay != null) {
+      // Fix: Use normalized dates for strict day difference check
+      final diffToToday = today.difference(lastActiveDay).inDays;
+      
+      // Audit Fix: Strict streak calculation (no grace period)
+      // GitHub streaks are strictly based on UTC days.
+      if (diffToToday == 0) {
+        int streak = 0;
+        DateTime expect = lastActiveDay;
+        
+        for (int i = sortedDays.length - 1; i >= 0; i--) {
+          final day = sortedDays[i];
           final dayDate = AppDateUtils.toDateOnly(day.date);
-          if (expect != null && AppDateUtils.isSameDay(dayDate, expect)) {
+          
+          if (dayDate.isAfter(lastActiveDay)) continue;
+          
+          if (AppDateUtils.isSameDay(dayDate, expect)) {
             if (day.isActive) {
-              graceStreak++;
+              streak++;
               expect = dayDate.subtract(const Duration(days: 1));
             } else {
               break;
             }
-          } else if (expect != null && dayDate.isBefore(expect)) {
-            break;
+          } else if (dayDate.isBefore(expect)) {
+            break; 
           }
         }
-        currentStreak = graceStreak;
+        currentStreakCount = streak;
       }
     }
 
-    return {'current': currentStreak, 'longest': longestStreak};
+    return {'current': currentStreakCount, 'longest': longestStreakCount};
   }
 
-  /// Get contributions for today
+  /// Get contributions for today (UTC to match GitHub)
   static int _getTodayContributions(List<ContributionDay> days) {
-    final today = AppDateUtils.toDateOnly(AppDateUtils.nowLocal);
+    // Audit Fix: Use UTC to match GitHub contribution data
+    final today = AppDateUtils.toDateOnly(AppDateUtils.nowUtc);
     final todayDay = days.firstWhere(
       (d) => AppDateUtils.isSameDay(d.date, today),
       orElse: () => ContributionDay(date: today, contributionCount: 0),
@@ -322,11 +266,14 @@ class ContributionStats {
 
   /// Find most active weekday
   static String _getMostActiveWeekday(List<ContributionDay> days) {
-    if (days.isEmpty) return 'None';
+    if (days.isEmpty) return AppConstants.fallbackWeekday;
 
     final weekdayCounts = List.filled(7, 0);
     for (final day in days) {
-      weekdayCounts[day.date.weekday - 1] += day.contributionCount;
+      final weekday = day.date.weekday;
+      if (weekday >= 1 && weekday <= 7) {
+        weekdayCounts[weekday - 1] += day.contributionCount;
+      }
     }
 
     int maxIndex = 0;
@@ -338,7 +285,7 @@ class ContributionStats {
       }
     }
 
-    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const weekdays = AppConstants.weekdays;
     return weekdays[maxIndex];
   }
 
@@ -375,9 +322,11 @@ class CachedContributionData {
   /// Calculated statistics (cached)
   final ContributionStats stats;
 
+  /// Dynamic contribution quartiles for heatmap rendering
+  final Quartiles quartiles;
+
   /// Pre-computed date lookup map for O(1) access
-  late final Map<String, ContributionDay> _dateLookupCache =
-      {for (var day in days) day.dateKey: day};
+  final Map<String, ContributionDay> _dateLookupCache;
 
   CachedContributionData({
     required this.username,
@@ -385,7 +334,12 @@ class CachedContributionData {
     required this.days,
     required this.lastUpdated,
     ContributionStats? stats,
-  }) : stats = stats ?? ContributionStats.fromDays(days);
+    Quartiles? quartiles,
+  })  : stats = stats ?? ContributionStats.fromDays(days),
+        quartiles = quartiles ??
+            RenderUtils.calculateQuartiles(
+                days.map((d) => d.contributionCount).toList()),
+        _dateLookupCache = {for (var day in days) day.dateKey: day};
 
   /// Create from GitHub API JSON response
   factory CachedContributionData.fromJson(Map<String, dynamic> json) {
@@ -399,7 +353,7 @@ class CachedContributionData {
           parsedDays.add(ContributionDay.fromJson(dayJson));
         }
       } catch (e) {
-        // Skip invalid days - logged in production via Crashlytics
+        debugPrint('CachedContributionData: Skipping invalid day JSON: $e');
         continue;
       }
     }
@@ -411,18 +365,20 @@ class CachedContributionData {
           ? DateTime.parse(lastUpdatedStr)
           : AppDateUtils.nowUtc;
     } catch (e) {
+      debugPrint('CachedContributionData: Using current time due to parse error: $e');
       timestamp = AppDateUtils.nowUtc;
     }
 
     // Calculate stats from parsed data
-    final stats = ContributionStats.fromDays(parsedDays);
+    final calculatedStats = ContributionStats.fromDays(parsedDays);
 
     return CachedContributionData(
       username: json['username'] as String? ?? '',
       totalContributions: json['totalContributions'] as int? ?? 0,
       days: parsedDays,
       lastUpdated: timestamp,
-      stats: stats,
+      stats: calculatedStats,
+      // quartiles will be auto-calculated by constructor
     );
   }
 
@@ -543,20 +499,7 @@ class WallpaperConfig {
     this.paddingLeft = 0.0,
     this.paddingRight = 0.0,
     this.cornerRadius = AppConstants.defaultCornerRadius,
-  })  : assert(verticalPosition >= 0.0 && verticalPosition <= 1.0,
-            'verticalPosition must be 0.0-1.0'),
-        assert(horizontalPosition >= 0.0 && horizontalPosition <= 1.0,
-            'horizontalPosition must be 0.0-1.0'),
-        assert(scale > 0.0, 'scale must be positive'),
-        assert(opacity >= 0.0 && opacity <= 1.0, 'opacity must be 0.0-1.0'),
-        assert(quoteOpacity >= 0.0 && quoteOpacity <= 1.0,
-            'quoteOpacity must be 0.0-1.0'),
-        assert(quoteFontSize > 0.0, 'quoteFontSize must be positive'),
-        assert(cornerRadius >= 0.0, 'cornerRadius must be non-negative'),
-        assert(paddingTop >= 0.0, 'paddingTop must be non-negative'),
-        assert(paddingBottom >= 0.0, 'paddingBottom must be non-negative'),
-        assert(paddingLeft >= 0.0, 'paddingLeft must be non-negative'),
-        assert(paddingRight >= 0.0, 'paddingRight must be non-negative');
+  });
 
   /// Create with default values
   factory WallpaperConfig.defaults() => const WallpaperConfig();
@@ -585,7 +528,8 @@ class WallpaperConfig {
             json['cornerRadius'], AppConstants.defaultCornerRadius, 0.0, 20.0),
       );
     } catch (e) {
-            return WallpaperConfig.defaults();
+      debugPrint('WallpaperConfig: Error parsing JSON, using defaults: $e');
+      return WallpaperConfig.defaults();
     }
   }
 
@@ -691,3 +635,4 @@ class WallpaperConfig {
   String toString() =>
       'WallpaperConfig(dark: $isDarkMode, scale: $scale, opacity: $opacity)';
 }
+

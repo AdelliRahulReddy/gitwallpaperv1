@@ -1,88 +1,70 @@
-// ══════════════════════════════════════════════════════════════════════════
-// 🚨 CUSTOM EXCEPTIONS
-// ══════════════════════════════════════════════════════════════════════════
-
-/// Base exception for GitHub API errors
 class GitHubException implements Exception {
   final String message;
   final int? statusCode;
   final String? details;
 
-  GitHubException(
-    this.message, {
-    this.statusCode,
-    this.details,
-  });
+  GitHubException(this.message, {this.statusCode, this.details});
+
+  factory GitHubException.fromResponse(int statusCode, String body) {
+    return GitHubException(
+      'GitHub API Error ($statusCode)',
+      statusCode: statusCode,
+      details: body,
+    );
+  }
 
   @override
-  String toString() => 'GitHubException: $message${details != null ? ' ($details)' : ''}';
-
-  /// Create exception from HTTP response
-  factory GitHubException.fromResponse(int statusCode, String? body) {
-    switch (statusCode) {
-      case 401:
-        return TokenExpiredException();
-      case 403:
-        final isRateLimit = body?.contains('rate limit') ?? false;
-        return isRateLimit ? RateLimitException() : AccessDeniedException();
-      case 404:
-        return UserNotFoundException();
-      default:
-        return GitHubException(
-          'API request failed',
-          statusCode: statusCode,
-          details: body,
-        );
-    }
-  }
+  String toString() => 'GitHubException: $message';
 }
 
-/// Token is invalid or expired
-class TokenExpiredException extends GitHubException {
-  TokenExpiredException() : super('Invalid or expired GitHub token', statusCode: 401);
-}
-
-/// Access denied (insufficient permissions)
-class AccessDeniedException extends GitHubException {
-  AccessDeniedException() : super('Access denied. Check token permissions.', statusCode: 403);
-}
-
-/// GitHub user not found
-class UserNotFoundException extends GitHubException {
-  UserNotFoundException() : super('GitHub user not found', statusCode: 404);
-}
-
-/// API rate limit exceeded
-class RateLimitException extends GitHubException {
-  RateLimitException() : super('API rate limit exceeded. Try again later.', statusCode: 403);
-}
-
-/// Network connectivity issues
 class NetworkException implements Exception {
   final String message;
-  
-  NetworkException([this.message = 'No internet connection']);
-  
+  NetworkException([this.message = 'Network error']);
+
   @override
   String toString() => 'NetworkException: $message';
 }
 
-/// Wallpaper setting failed
+class UserNotFoundException implements Exception {
+  @override
+  String toString() => 'UserNotFoundException: User not found';
+}
+
+class RateLimitException implements Exception {
+  @override
+  String toString() => 'RateLimitException: API rate limit exceeded';
+}
+
+class TokenExpiredException implements Exception {
+  @override
+  String toString() => 'TokenExpiredException: Token expired or invalid';
+}
+
+class AccessDeniedException implements Exception {
+  @override
+  String toString() => 'AccessDeniedException: Access denied';
+}
+
+class StorageException implements Exception {
+  final String message;
+  StorageException(this.message);
+
+  @override
+  String toString() => 'StorageException: $message';
+}
+
 class WallpaperException implements Exception {
   final String message;
-  
-  WallpaperException([this.message = 'Failed to set wallpaper']);
-  
+  WallpaperException(this.message);
+
   @override
   String toString() => 'WallpaperException: $message';
 }
 
-/// Storage/data persistence failed
-class StorageException implements Exception {
+class ContextInitException implements Exception {
   final String message;
-  
-  StorageException([this.message = 'Storage operation failed']);
-  
+  ContextInitException(this.message);
+
   @override
-  String toString() => 'StorageException: $message';
+  String toString() => 'ContextInitException: $message';
 }

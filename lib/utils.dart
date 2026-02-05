@@ -2,8 +2,12 @@
 // 🛠️ UTILITIES - Production-Ready Helpers
 // ══════════════════════════════════════════════════════════════════════════
 
+import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
+
+import 'exceptions.dart';
 import 'theme.dart';
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -86,30 +90,58 @@ class ErrorHandler {
   }
 
   /// Hide loading dialog.
-  /// Only call when the loading dialog is the topmost route;
-  /// otherwise may accidentally pop another dialog.
   static void hideLoading(BuildContext context) {
     if (context.mounted) {
-      Navigator.of(context, rootNavigator: true).pop();
+      // Use canPop check to avoid popping the wrong thing if the dialog isn't there
+      final navigator = Navigator.of(context, rootNavigator: true);
+      if (navigator.canPop()) {
+        navigator.pop();
+      }
     }
   }
 
   /// Convert error to user-friendly message
   static String getUserFriendlyMessage(dynamic error) {
+    if (error is NetworkException || error is SocketException) {
+      return 'No internet connection. Please check your network.';
+    }
+
+    if (error is TokenExpiredException) {
+      return 'Invalid or expired GitHub token.';
+    }
+
+    if (error is AccessDeniedException) {
+      return 'Access denied. Check your token permissions.';
+    }
+
+    if (error is UserNotFoundException) {
+      return 'GitHub user not found. Check the username.';
+    }
+
+    if (error is RateLimitException) {
+      return 'GitHub API rate limit exceeded. Try again later.';
+    }
+
+    if (error is StorageException) {
+      return 'Failed to save settings. Please restart the app.';
+    }
+
+    if (error is WallpaperException) {
+      return 'Failed to set wallpaper. Check app permissions.';
+    }
+
     final errorStr = error.toString().toLowerCase();
 
-    // Network errors
+    // Fallback string matching for untyped errors
     if (errorStr.contains('socket') || errorStr.contains('network')) {
       return 'No internet connection. Please check your network.';
     }
 
-    // Timeout errors
     if (errorStr.contains('timeout')) {
       return 'Request timed out. Please try again.';
     }
 
-    // GitHub API errors
-    if (errorStr.contains('401') || errorStr.contains('authentication')) {
+    if (errorStr.contains('401')) {
       return 'Invalid GitHub token. Please check your credentials.';
     }
 
@@ -117,27 +149,9 @@ class ErrorHandler {
       return 'Access denied. Check your token permissions.';
     }
 
-    if (errorStr.contains('404')) {
-      return 'GitHub user not found. Check the username.';
-    }
-
-    if (errorStr.contains('rate limit')) {
-      return 'GitHub API rate limit exceeded. Try again in an hour.';
-    }
-
-    // Storage errors
-    if (errorStr.contains('storage') || errorStr.contains('preference')) {
-      return 'Failed to save settings. Please restart the app.';
-    }
-
-    // Wallpaper errors
-    if (errorStr.contains('wallpaper')) {
-      return 'Failed to set wallpaper. Check app permissions.';
-    }
-
-    // Firebase errors
-    if (errorStr.contains('firebase')) {
-      return 'Service temporarily unavailable. Try again later.';
+    // Audit Fix: Handle ContextInitException
+    if (error is ContextInitException) {
+      return 'App initialization failed. Please restart.';
     }
 
     // Default fallback
@@ -184,29 +198,20 @@ class ValidationUtils {
     return null;
   }
 
-  /// Validate GitHub token (aligned with GitHubService.isValidTokenFormat)
+  /// Validate GitHub token
   static String? validateToken(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Token is required';
     }
 
-    final trimmed = value.trim();
-
-    // Classic personal access token (ghp_)
-    if (RegExp(r'^ghp_[a-zA-Z0-9]{36}$').hasMatch(trimmed)) {
-      return null;
+    final t = value.trim();
+    final isValid = t.length >= 10 && !t.contains(' ');
+    
+    if (!isValid) {
+      return 'Invalid token format (use ghp_, github_pat_, or OAuth token)';
     }
 
-    // Fine-grained PAT (github_pat_)
-    if (RegExp(r'^github_pat_[a-zA-Z0-9_]{50,}$').hasMatch(trimmed)) {
-      return null;
-    }
-    // OAuth token (40 hex characters)
-    if (RegExp(r'^[a-f0-9]{40}$').hasMatch(trimmed)) {
-      return null;
-    }
-
-    return 'Invalid token format (use ghp_, github_pat_, or OAuth token)';
+    return null;
   }
 
   /// Validate custom quote
@@ -229,6 +234,83 @@ class ValidationUtils {
     }
 
     return null;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 📅 DATE UTILS
+// ══════════════════════════════════════════════════════════════════════════
+
+/// Utilities for date handling and manipulation
+class AppDateUtils {
+  AppDateUtils._(); // Private constructor
+
+  /// Get current date/time in UTC
+  static DateTime get nowUtc => DateTime.now().toUtc();
+
+  /// Get current date/time in local timezone
+  static DateTime get nowLocal => DateTime.now();
+
+  /// Convert DateTime to date-only (strips time component)
+  static DateTime toDateOnly(DateTime dt) {
+    return DateTime(dt.year, dt.month, dt.day);
+  }
+
+  /// Format date as ISO date string (YYYY-MM-DD)
+  static String toIsoDateString(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  /// Create date key for map lookups (YYYY-MM-DD format)
+  static String createDateKey(DateTime date) {
+    // Audit Fix: Direct alias to avoid logic duplication
+    return toIsoDateString(date);
+  }
+
+  static int _parseFailures = 0;
+
+  /// Parse ISO date string to DateTime (date-only)
+  static DateTime? parseIsoDate(String? dateStr) {
+    if (dateStr == null) return null;
+    try {
+      final parsed = DateTime.parse(dateStr);
+      return toDateOnly(parsed);
+    } catch (e) {
+      _parseFailures++;
+      // Audit Fix: Track failure rate (simple counter for now)
+      if (_parseFailures % 10 == 0) {
+        debugPrint('⚠️ High Date Parse Failure Rate: $_parseFailures failures. Last error: $e');
+      }
+      return null;
+    }
+  }
+
+  /// Check if two dates are the same day (ignoring time)
+  static bool isSameDay(DateTime date1, DateTime date2) {
+    return date1.year == date2.year &&
+        date1.month == date2.month &&
+        date1.day == date2.day;
+  }
+
+  static bool isLeapYear(int year) {
+    if (year <= 0) {
+      throw ArgumentError.value(year, 'year', 'Year must be positive');
+    }
+    if (year % 400 == 0) return true;
+    if (year % 100 == 0) return false;
+    return year % 4 == 0;
+  }
+
+  static int daysInMonth(int year, int month) {
+    if (year <= 0) {
+      throw ArgumentError.value(year, 'year', 'Year must be positive');
+    }
+    if (month < 1 || month > 12) {
+      throw ArgumentError.value(month, 'month', 'Month must be 1-12');
+    }
+    if (month == 2) return isLeapYear(year) ? 29 : 28;
+    if (month == 4 || month == 6 || month == 9 || month == 11) return 30;
+    return 31;
   }
 }
 
@@ -302,4 +384,227 @@ class AppStrings {
   static const developerName = 'Adelli Rahulreddy';
   static const developerTagline = 'Building tools for developers';
   static const appVersion = '1.0.1';
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ⚙️ APP CONSTANTS - Configuration Values
+// ══════════════════════════════════════════════════════════════════════════
+
+/// Application-wide configuration constants
+class AppConstants {
+  // Private constructor to prevent instantiation
+  AppConstants._();
+
+  // ════════════════════════════════════════════════════════════════════════
+  // WALLPAPER DEFAULTS
+  // ════════════════════════════════════════════════════════════════════════
+
+  static const double defaultWallpaperScale = 0.7;
+  static const double defaultWallpaperOpacity = 1.0;
+  static const double defaultCornerRadius = 2.0;
+
+  // ════════════════════════════════════════════════════════════════════════
+  // HEATMAP RENDERING
+  // ════════════════════════════════════════════════════════════════════════
+
+  static const double heatmapBoxSize = 15.0;
+  static const double heatmapBoxSpacing = 3.0;
+  static const int heatmapWeeks = 53;
+  static const int heatmapDaysPerWeek = 7;
+
+  /// Total days displayed in heatmap grid
+  static const int heatmapTotalDays = heatmapWeeks * heatmapDaysPerWeek; // 371
+
+  static const int intensity1 = 3;
+  static const int intensity2 = 6;
+  static const int intensity3 = 9;
+
+  static const int monthGridColumns = 7;
+
+  // ════════════════════════════════════════════════════════════════════════
+  // API & CACHE
+  // ════════════════════════════════════════════════════════════════════════
+
+  /// Days of contribution data to fetch from GitHub (1 year + buffer)
+  static const int githubDataFetchDays = 370;
+
+  /// API request timeout
+  static const Duration apiTimeout = Duration(seconds: 30);
+
+  /// Cache expiry duration
+  static const Duration cacheExpiry = Duration(hours: 6);
+
+  // ════════════════════════════════════════════════════════════════════════
+  // STORAGE KEYS
+  // ════════════════════════════════════════════════════════════════════════
+
+  static const String keyToken = 'gh_token';
+  static const String keyUsername = 'username';
+  static const String keyCachedData = 'cached_data_v2';
+  static const String keyWallpaperConfig = 'wp_config_v2';
+  static const String keyLastUpdate = 'last_update';
+  static const String keyAutoUpdate = 'auto_update';
+  static const String keyOnboarding = 'onboarding';
+  static const String keyDimensionWidth = 'dim_w';
+  static const String keyDimensionHeight = 'dim_h';
+  static const String keyDimensionPixelRatio = 'dim_pr';
+  static const String keyDeviceModel = 'device_model';
+  static const String keySafeInsetTop = 'safe_top';
+  static const String keySafeInsetBottom = 'safe_bottom';
+  static const String keySafeInsetLeft = 'safe_left';
+  static const String keySafeInsetRight = 'safe_right';
+  static const String keyWallpaperHash = 'wp_hash';
+  static const String keyWallpaperPath = 'wp_path';
+
+  // ════════════════════════════════════════════════════════════════════════
+  // UI DIMENSIONS
+  // ════════════════════════════════════════════════════════════════════════
+
+  /// Default wallpaper dimensions (1080p portrait)
+  static const double defaultWallpaperWidth = 1080.0;
+  static const double defaultWallpaperHeight = 1920.0;
+  static const double defaultPixelRatio = 1.0;
+
+  // ════════════════════════════════════════════════════════════════════════
+  // VALIDATION
+  // ════════════════════════════════════════════════════════════════════════
+
+  /// Validate contribution level is within valid range
+  static bool isValidContributionLevel(int level) => level >= 0 && level <= 4;
+
+  // ════════════════════════════════════════════════════════════════════════
+  // FIREBASE
+  // ════════════════════════════════════════════════════════════════════════
+
+  static const String fcmTopicDailyUpdates = 'daily-updates';
+
+  static const List<String> weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  static const String fallbackWeekday = 'None';
+
+  // ════════════════════════════════════════════════════════════════════════
+  // API & CONNECTIVITY
+  // ════════════════════════════════════════════════════════════════════════
+  static const String apiUrl = 'https://api.github.com/graphql';
+  static const int refreshCooldownMinutes = 15;
+  static const List<String> connectivityHosts = ['api.github.com', 'one.one.one.one'];
+
+  // ════════════════════════════════════════════════════════════════════════
+  // VALIDATION & LIMITS
+  // ════════════════════════════════════════════════════════════════════════
+  static const int usernameMaxLength = 39;
+  static const int quoteMaxLength = 200;
+
+  // ════════════════════════════════════════════════════════════════════════
+  // UI LAYOUT BUFFERS
+  // ════════════════════════════════════════════════════════════════════════
+  static const double clockAreaBuffer = 120.0;
+  static const double horizontalBuffer = 32.0;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 🎨 RENDER UTILS
+// ══════════════════════════════════════════════════════════════════════════
+
+class RenderUtils {
+  static final Map<String, ui.Radius> _radiusCache = {};
+  static const int _maxCacheSize = 50;
+
+  /// Render header text for a date
+  static String headerTextForDate(DateTime date) {
+    const months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+    return "${months[date.month - 1]} ${date.year}";
+  }
+
+  /// Shared text drawing helper
+  static TextPainter drawText({
+    required ui.Canvas canvas,
+    required String text,
+    required TextStyle style,
+    required Offset offset,
+    required double maxWidth,
+    TextAlign textAlign = TextAlign.left,
+    int? maxLines,
+    bool paint = true,
+  }) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+      textAlign: textAlign,
+      maxLines: maxLines,
+    )..layout(maxWidth: maxWidth);
+
+    if (paint) {
+      double dx = offset.dx;
+      if (textAlign == TextAlign.center) {
+        dx += (maxWidth - painter.width) / 2;
+      } else if (textAlign == TextAlign.right) {
+        dx += maxWidth - painter.width;
+      }
+      painter.paint(canvas, Offset(dx, offset.dy));
+    }
+    return painter;
+  }
+
+  /// Calculate contribution quartiles for dynamic intensity
+  static Quartiles calculateQuartiles(List<int> counts) {
+    // Filter non-zero contributions
+    final nonZero = counts.where((c) => c > 0).toList()..sort();
+    
+    if (nonZero.isEmpty) {
+      return Quartiles(1, 2, 3); // Fallback defaults
+    }
+
+    // Calculate percentiles
+    int getPercentile(double p) {
+      final index = (nonZero.length * p).ceil() - 1;
+      return nonZero[index.clamp(0, nonZero.length - 1)];
+    }
+
+    final q1 = getPercentile(0.25);
+    final q2 = getPercentile(0.50);
+    final q3 = getPercentile(0.75);
+
+    // Ensure strict ascending order to avoid level overlap
+    final t1 = q1 > 0 ? q1 : 1;
+    final t2 = q2 > t1 ? q2 : t1 + 1;
+    final t3 = q3 > t2 ? q3 : t2 + 1;
+
+    return Quartiles(t1, t2, t3);
+  }
+
+  /// Get contribution level (0-4) using dynamic thresholds
+  static int getContributionLevel(int count, {Quartiles? quartiles}) {
+    if (count == 0) return 0;
+    
+    // If no quartiles provided, use fallback defaults (3/6/9)
+    // This maintains backward compatibility if caller doesn't have quartiles
+    final q = quartiles ?? Quartiles(AppConstants.intensity1, AppConstants.intensity2, AppConstants.intensity3);
+    
+    if (count <= q.q1) return 1;
+    if (count <= q.q2) return 2;
+    if (count <= q.q3) return 3;
+    return 4;
+  }
+  /// Safe radius cache access
+  static ui.Radius getCachedRadius(double radius, double scale) {
+    final key = '${radius}_$scale';
+    if (_radiusCache.length >= _maxCacheSize && !_radiusCache.containsKey(key)) {
+      _radiusCache.remove(_radiusCache.keys.first);
+    }
+    return _radiusCache.putIfAbsent(key, () => Radius.circular(radius * scale));
+  }
+
+  static void clearCaches() => _radiusCache.clear();
+}
+
+/// Dynamic intensity thresholds
+class Quartiles {
+  final int q1;
+  final int q2;
+  final int q3;
+
+  const Quartiles(this.q1, this.q2, this.q3);
+  
+  @override
+  String toString() => 'Q($q1, $q2, $q3)';
 }

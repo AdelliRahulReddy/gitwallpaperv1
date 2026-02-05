@@ -4,10 +4,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:github_wallpaper/services.dart';
+import 'package:github_wallpaper/rendering.dart';
 import 'package:github_wallpaper/models.dart';
 import 'package:github_wallpaper/theme.dart';
 import 'package:github_wallpaper/utils.dart';
-import 'package:github_wallpaper/app_constants.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:io';
 
@@ -343,17 +343,6 @@ class _CustomizePageState extends State<CustomizePage> {
     var wallpaperWidth = dims?['width'] ?? AppConstants.defaultWallpaperWidth;
     var wallpaperHeight = dims?['height'] ?? AppConstants.defaultWallpaperHeight;
     final wallpaperPixelRatio = dims?['pixelRatio'] ?? AppConstants.defaultPixelRatio;
-
-    // Android Home/Both screens may use different dimensions than lock; use stored desired size when available
-    if (Platform.isAndroid &&
-        (_previewTarget == WallpaperTarget.home ||
-            _previewTarget == WallpaperTarget.both)) {
-      final desired = StorageService.getDesiredWallpaperSize();
-      if (desired != null) {
-        wallpaperWidth = desired['width']!;
-        wallpaperHeight = desired['height']!;
-      }
-    }
 
     final physicalWidth = (wallpaperWidth * wallpaperPixelRatio).round();
     final physicalHeight = (wallpaperHeight * wallpaperPixelRatio).round();

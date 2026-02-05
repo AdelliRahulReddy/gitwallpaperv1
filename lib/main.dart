@@ -9,46 +9,13 @@ import 'services.dart';
 import 'theme.dart';
 import 'firebase_options.dart';
 import 'utils.dart';
-
-// Import pages
 import 'pages/onboarding_page.dart';
 import 'pages/main_nav_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  bool storageReady = false;
-  bool firebaseReady = false;
-
-  try {
-    await StorageService.init();
-    storageReady = true;
-  } catch (e) {
-    debugPrint('Storage initialization failed: $e');
-    try {
-      await FirebaseCrashlytics.instance.recordError(e, StackTrace.current);
-    } catch (crashlyticsError) {
-      debugPrint('Crashlytics logging failed during storage init: $crashlyticsError');
-    }
-  }
-
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    await FirebaseCrashlytics.instance
-        .setCrashlyticsCollectionEnabled(!kDebugMode);
-    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
-    firebaseReady = true;
-  } catch (e) {
-    debugPrint('Firebase initialization failed: $e');
-    try {
-      await FirebaseCrashlytics.instance.recordError(e, StackTrace.current);
-    } catch (crashlyticsError) {
-      debugPrint('Crashlytics logging failed during firebase init: $crashlyticsError');
-    }
-  }
-
+  // 5. SystemChrome Configuration Timing: Set early to avoid flash of unstyled UI
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -58,20 +25,63 @@ void main() async {
     ),
   );
 
+  bool storageReady = false;
+  bool firebaseReady = false;
+  Object? storageError;
+  StackTrace? storageStack;
+
+  // 1 & 6. Initialization with Timeouts & Firebase order
+  try {
+    await StorageService.init().timeout(const Duration(seconds: 10));
+    storageReady = true;
+  } catch (e, stack) {
+    debugPrint('Storage initialization failed: $e');
+    storageError = e;
+    storageStack = stack;
+  }
+
+  try {
+    // 3. Unsafe Firebase Service Calls: Fix initialization order
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    ).timeout(const Duration(seconds: 15));
+
+    await FirebaseCrashlytics.instance
+        .setCrashlyticsCollectionEnabled(!kDebugMode);
+
+    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+
+    firebaseReady = true;
+    
+    // 1. Fatal Bug Fix: Log actual storage error safely now
+    if (!storageReady && storageError != null) {
+      // We can only log if Firebase initialized successfully
+      await FirebaseCrashlytics.instance.recordError(
+        storageError,
+        storageStack,
+        reason: 'Storage init failed during boot',
+        fatal: true, // Mark as fatal since app relies on storage
+      );
+    }
+  } catch (e) {
+    debugPrint('Firebase initialization failed: $e');
+    // If Firebase fails, we can't log to Crashlytics, but app might still run locally
+  }
+
   runApp(MyApp(
-    storageReady: storageReady,
-    firebaseReady: firebaseReady,
+    initResult: (storageReady: storageReady, firebaseReady: firebaseReady),
   ));
 }
 
+// 7. Awkward Boolean Passing Pattern: Using a record instead
+typedef AppInitResult = ({bool storageReady, bool firebaseReady});
+
 class MyApp extends StatelessWidget {
-  final bool storageReady;
-  final bool firebaseReady;
+  final AppInitResult initResult;
 
   const MyApp({
     super.key,
-    required this.storageReady,
-    required this.firebaseReady,
+    required this.initResult,
   });
 
   @override
@@ -82,22 +92,17 @@ class MyApp extends StatelessWidget {
       darkTheme: AppTheme.darkTheme(context),
       themeMode: ThemeMode.system,
       debugShowCheckedModeBanner: false,
-      home: AppInitializer(
-        storageReady: storageReady,
-        firebaseReady: firebaseReady,
-      ),
+      home: AppInitializer(initResult: initResult),
     );
   }
 }
 
 class AppInitializer extends StatefulWidget {
-  final bool storageReady;
-  final bool firebaseReady;
+  final AppInitResult initResult;
 
   const AppInitializer({
     super.key,
-    required this.storageReady,
-    required this.firebaseReady,
+    required this.initResult,
   });
 
   @override
@@ -105,8 +110,9 @@ class AppInitializer extends StatefulWidget {
 }
 
 class _AppInitializerState extends State<AppInitializer> {
-  // Local state to allow retries
   late bool _storageReady;
+  bool _firebaseReady = false;
+  bool _firebaseServicesReady = false;
 
   bool _isInitialized = false;
   bool _isLoggedIn = false;
@@ -115,41 +121,38 @@ class _AppInitializerState extends State<AppInitializer> {
   @override
   void initState() {
     super.initState();
-    _storageReady = widget.storageReady;
+    _storageReady = widget.initResult.storageReady;
+    _firebaseReady = widget.initResult.firebaseReady;
     _startInitialization();
   }
 
   Future<void> _startInitialization() async {
-    // 1. Critical Dependency Check & Retry
-    if (!_storageReady) {
-      try {
-        await StorageService.init();
-        _storageReady = true;
-      } catch (e) {
-        debugPrint('Storage retry failed: $e');
-        if (mounted) {
-          setState(() {
-            _error = AppStrings.errorStorageInit;
-          });
-        }
-        return;
-      }
-    }
-
-    // 2. Setup Lifecycle-dependent config
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _performContextDependentInit();
-    });
-  }
-
-  Future<void> _performContextDependentInit() async {
-    if (!mounted) return;
-
     try {
-      await AppConfig.initializeFromContext(context);
+      // 1. Critical Dependency Check & Retry
+      if (!_storageReady) {
+        await StorageService.init().timeout(const Duration(seconds: 10));
+        _storageReady = true;
+      }
 
-      if (widget.firebaseReady) {
+      // 4. Retry button must re-attempt Firebase services
+      if (!_firebaseReady) {
+        try {
+          await Firebase.initializeApp(
+            options: DefaultFirebaseOptions.currentPlatform,
+          ).timeout(const Duration(seconds: 15));
+          _firebaseReady = true;
+        } catch (_) {}
+      }
+
+      if (_firebaseReady && !_firebaseServicesReady) {
         await _initFirebaseServices();
+        _firebaseServicesReady = true;
+      }
+
+      // 2 & 3. Remove delay and add timeout to AppConfig
+      if (mounted) {
+        await AppConfig.initializeFromContext(context)
+            .timeout(const Duration(seconds: 5));
       }
 
       final loggedIn = StorageService.isOnboardingComplete();
@@ -161,15 +164,21 @@ class _AppInitializerState extends State<AppInitializer> {
         });
       }
     } catch (e) {
+      debugPrint('Initialization error: $e');
       if (mounted) {
-        // Mask raw error with user-friendly message
         final friendlyMsg = ErrorHandler.getUserFriendlyMessage(e);
         setState(() => _error = friendlyMsg);
+      }
+
+      // 3. Unsafe Firebase Service Calls: Verify readiness before recording
+      if (_firebaseReady) {
+        FirebaseCrashlytics.instance.recordError(e, StackTrace.current);
       }
     }
   }
 
   Future<void> _initFirebaseServices() async {
+    // 2. App Check Initialization Order
     try {
       await FirebaseAppCheck.instance.activate(
         // ignore: deprecated_member_use
@@ -181,12 +190,14 @@ class _AppInitializerState extends State<AppInitializer> {
       );
     } catch (e) {
       debugPrint('AppCheck init failed: $e');
+      rethrow; // Rethrow to allow retry logic to track success
     }
 
     try {
       await FcmService.init();
     } catch (e) {
       debugPrint('FCM init failed: $e');
+      rethrow;
     }
   }
 
@@ -218,6 +229,7 @@ class _AppInitializerState extends State<AppInitializer> {
                     setState(() {
                       _error = null;
                       _isInitialized = false;
+                      _firebaseServicesReady = false;
                     });
                     _startInitialization();
                   },
