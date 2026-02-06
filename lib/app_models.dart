@@ -3,7 +3,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 
 import 'package:flutter/foundation.dart';
-import 'utils.dart';
+import 'app_utils.dart';
 
 int _toNonNegativeInt(dynamic value, {int fallback = 0}) {
   if (value is! num) return fallback;

@@ -3,9 +3,9 @@
 // ══════════════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
-import 'package:github_wallpaper/services.dart';
+import 'package:github_wallpaper/app_services.dart';
 import 'package:github_wallpaper/app_theme.dart';
-import 'package:github_wallpaper/utils.dart';
+import 'package:github_wallpaper/app_utils.dart';
 import 'package:github_wallpaper/pages/onboarding_page.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';

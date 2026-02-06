@@ -5,10 +5,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
-import 'package:github_wallpaper/services.dart';
+import 'package:github_wallpaper/app_services.dart';
 import 'package:github_wallpaper/app_theme.dart';
 import 'package:github_wallpaper/pages/main_nav_page.dart';
-import 'package:github_wallpaper/utils.dart';
+import 'package:github_wallpaper/app_utils.dart';
 
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});

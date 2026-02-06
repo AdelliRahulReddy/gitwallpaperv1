@@ -7,10 +7,10 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
-import 'services.dart';
+import 'app_services.dart';
 import 'app_theme.dart';
 import 'firebase_options.dart';
-import 'utils.dart';
+import 'app_utils.dart';
 import 'pages/onboarding_page.dart';
 import 'pages/main_nav_page.dart';
 

@@ -5,9 +5,9 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:github_wallpaper/services.dart';
-import 'package:github_wallpaper/models.dart';
-import 'package:github_wallpaper/utils.dart';
+import 'package:github_wallpaper/app_services.dart';
+import 'package:github_wallpaper/app_models.dart';
+import 'package:github_wallpaper/app_utils.dart';
 
 // Import sub-pages
 import 'home_page.dart';

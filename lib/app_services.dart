@@ -17,8 +17,8 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'app_exceptions.dart';
-import 'models.dart';
-import 'utils.dart';
+import 'app_models.dart';
+import 'app_utils.dart';
 import 'ui_render.dart';
 
 import 'firebase_options.dart';
