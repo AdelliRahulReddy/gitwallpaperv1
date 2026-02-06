@@ -64,7 +64,7 @@ class _MainNavPageState extends State<MainNavPage> with WidgetsBindingObserver {
     final lastUpdate = StorageService.getLastUpdate();
     if (lastUpdate != null) {
       final diff = DateTime.now().difference(lastUpdate);
-      if (diff.inMinutes > 30) {
+      if (diff.inMinutes > AppConstants.resumeSyncThresholdMinutes) {
         _syncData(silent: true);
       }
     }
@@ -84,7 +84,7 @@ class _MainNavPageState extends State<MainNavPage> with WidgetsBindingObserver {
 
       if (cached != null) {
         // Check if cache is "complete" (has at least 3 months of data)
-        if (cached.days.length < 90) {
+        if (cached.days.length < AppConstants.minCachedContributionDays) {
           await _syncData(force: true);
         } else {
           setState(() {
@@ -112,7 +112,7 @@ class _MainNavPageState extends State<MainNavPage> with WidgetsBindingObserver {
     final lastUpdate = StorageService.getLastUpdate();
     if (lastUpdate != null) {
       final diff = DateTime.now().difference(lastUpdate);
-      if (diff.inHours >= 1) {
+      if (diff.inHours >= AppConstants.backgroundSyncThresholdHours) {
         _syncData(silent: true);
       }
     }

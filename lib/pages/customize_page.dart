@@ -31,7 +31,7 @@ class _CustomizePageState extends State<CustomizePage> {
   late WallpaperConfig _config;
   late TextEditingController _quoteController;
   bool _isGenerating = false;
-  String _deviceName = 'Loading device info...';
+  String _deviceName = 'Loading...';
   // Fixed to lock screen layout; preview uses MonthHeatmapRenderer for all targets
   static const WallpaperTarget _previewTarget = WallpaperTarget.lock;
 
@@ -101,7 +101,7 @@ class _CustomizePageState extends State<CustomizePage> {
   Future<void> _saveAndApply() async {
     final target = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: AppTheme.bgWhite,
+      backgroundColor: AppTheme.lightBg,
       shape: const RoundedRectangleBorder(
         borderRadius:
             BorderRadius.vertical(top: Radius.circular(AppTheme.radiusLarge)),
@@ -115,9 +115,9 @@ class _CustomizePageState extends State<CustomizePage> {
               const Text(
                 'Set Wallpaper',
                 style: TextStyle(
-                  fontSize: AppTheme.fontSizeTitle,
+                  fontSize: AppTheme.fontTitle,
                   fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
+                  color: AppTheme.lightText,
                 ),
               ),
               const SizedBox(height: AppTheme.spacing16),
@@ -285,22 +285,22 @@ class _CustomizePageState extends State<CustomizePage> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: AppTheme.textTertiary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(AppTheme.radius3XLarge),
+                color: AppTheme.darkText.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppTheme.radiusXL),
               ),
               child: const Icon(
                 Icons.palette_outlined,
                 size: 40,
-                color: AppTheme.textTertiary,
+                color: AppTheme.darkText,
               ),
             ),
             const SizedBox(height: AppTheme.spacing24),
-            const Text(
+            Text(
               'No data available',
               style: TextStyle(
-                fontSize: AppTheme.fontSizeLead,
+                fontSize: AppTheme.fontLarge,
                 fontWeight: FontWeight.w600,
-                color: AppTheme.textSecondary,
+                color: AppTheme.lightText.withValues(alpha: 0.7),
               ),
             ),
             const SizedBox(height: AppTheme.spacing8),
@@ -308,7 +308,7 @@ class _CustomizePageState extends State<CustomizePage> {
               'Sync your GitHub data first',
               style: TextStyle(
                 fontSize: 14,
-                color: AppTheme.textTertiary,
+                color: AppTheme.darkText,
               ),
             ),
             const SizedBox(height: AppTheme.spacing24),
@@ -321,13 +321,13 @@ class _CustomizePageState extends State<CustomizePage> {
                 label: const Text(
                   'Sync Now',
                   style: TextStyle(
-                    fontSize: AppTheme.fontSizeLead,
+                    fontSize: AppTheme.fontLarge,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryBlue,
-                  foregroundColor: AppTheme.textWhite,
+                  foregroundColor: AppTheme.lightSurface,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                   ),
@@ -388,10 +388,10 @@ class _CustomizePageState extends State<CustomizePage> {
                 height: previewHeight,
                 width: previewWidth,
                 decoration: BoxDecoration(
-                  color: AppTheme.bgWhite,
+                  color: AppTheme.lightBg,
                   borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-                  boxShadow: AppTheme.cardShadow,
-                  border: Border.all(color: AppTheme.previewBorder, width: 1),
+                  boxShadow: AppTheme.shadow(Colors.black),
+                  border: Border.all(color: AppTheme.lightBorder, width: 1),
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
@@ -425,9 +425,9 @@ class _CustomizePageState extends State<CustomizePage> {
             Text(
               'Preview for $_deviceName',
               style: const TextStyle(
-                fontSize: AppTheme.fontSizeBody,
+                fontSize: AppTheme.fontBody,
                 fontWeight: FontWeight.w500,
-                color: AppTheme.textSecondary,
+                color: AppTheme.lightText,
               ),
               textAlign: TextAlign.center,
               maxLines: 1,
@@ -437,8 +437,8 @@ class _CustomizePageState extends State<CustomizePage> {
             Text(
               'Wallpaper: ${physicalWidth}x${physicalHeight}px',
               style: const TextStyle(
-                fontSize: AppTheme.fontSizeCaption,
-                color: AppTheme.textTertiary,
+                fontSize: AppTheme.fontCaption,
+                color: AppTheme.darkText,
               ),
               textAlign: TextAlign.center,
             ),
@@ -461,16 +461,16 @@ class _CustomizePageState extends State<CustomizePage> {
   Widget _buildCustomizationSection() {
     return Container(
       padding: const EdgeInsets.all(AppTheme.spacing20),
-      decoration: AppTheme.whiteCard(),
+      decoration: AppTheme.glassCard(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             'Text Overlay',
             style: TextStyle(
-              fontSize: AppTheme.fontSizeBase,
+              fontSize: AppTheme.fontBase,
               fontWeight: FontWeight.w600,
-              color: AppTheme.textPrimary,
+              color: AppTheme.lightText,
             ),
           ),
           const SizedBox(height: 12),
@@ -480,7 +480,7 @@ class _CustomizePageState extends State<CustomizePage> {
               labelText: 'Custom Quote',
               hintText: 'Enter your motivation...',
               filled: true,
-              fillColor: AppTheme.bgLight,
+              fillColor: AppTheme.lightBg,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                 borderSide: BorderSide.none,
@@ -527,14 +527,14 @@ class _CustomizePageState extends State<CustomizePage> {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
+                  color: AppTheme.lightText,
                 ),
               ),
               TextButton.icon(
                 onPressed: _fitToWidth,
                 icon: const Icon(Icons.fit_screen, size: 16),
                 label: const Text('Fit Width',
-                    style: TextStyle(fontSize: AppTheme.fontSizeBody)),
+                    style: TextStyle(fontSize: AppTheme.fontBody)),
                 style: TextButton.styleFrom(
                   padding: EdgeInsets.zero,
                   visualDensity: VisualDensity.compact,
@@ -551,7 +551,7 @@ class _CustomizePageState extends State<CustomizePage> {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
+                  color: AppTheme.lightText,
                 ),
               ),
               Switch(
@@ -566,7 +566,7 @@ class _CustomizePageState extends State<CustomizePage> {
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
               activeTrackColor: AppTheme.primaryBlue,
-              inactiveTrackColor: AppTheme.borderLight,
+              inactiveTrackColor: AppTheme.lightBorder,
               thumbColor: AppTheme.primaryBlue,
               overlayColor: AppTheme.primaryBlue.withValues(alpha: 0.2),
               trackHeight: 4,
@@ -609,8 +609,8 @@ class _CustomizePageState extends State<CustomizePage> {
           const Text(
             'Layout automatically reserves space for the status bar/notch and lock-screen clock. Position controls are applied after that.',
             style: TextStyle(
-              fontSize: AppTheme.fontSizeCaption,
-              color: AppTheme.textTertiary,
+              fontSize: AppTheme.fontCaption,
+              color: AppTheme.darkText,
             ),
           ),
           const SizedBox(height: AppTheme.spacing12),
@@ -663,13 +663,13 @@ class _CustomizePageState extends State<CustomizePage> {
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: AppTheme.textPrimary,
+                color: AppTheme.lightText,
               ),
             ),
             Text(
               value.toStringAsFixed(2),
               style: const TextStyle(
-                fontSize: AppTheme.fontSizeSub,
+                fontSize: AppTheme.fontSmall,
                 fontWeight: FontWeight.w600,
                 color: AppTheme.primaryBlue,
               ),
@@ -680,7 +680,7 @@ class _CustomizePageState extends State<CustomizePage> {
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
             activeTrackColor: AppTheme.primaryBlue,
-            inactiveTrackColor: AppTheme.borderLight,
+            inactiveTrackColor: AppTheme.lightBorder,
             thumbColor: AppTheme.primaryBlue,
             overlayColor: AppTheme.primaryBlue.withValues(alpha: 0.2),
             trackHeight: 4,
@@ -723,7 +723,7 @@ class _CustomizePageState extends State<CustomizePage> {
                   height: 24,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: AppTheme.textWhite,
+                    color: AppTheme.lightSurface,
                   ),
                 )
               : const Row(
@@ -734,9 +734,9 @@ class _CustomizePageState extends State<CustomizePage> {
                     Text(
                       'Apply Wallpaper',
                       style: TextStyle(
-                        fontSize: AppTheme.fontSizeLead,
+                        fontSize: AppTheme.fontLarge,
                         fontWeight: FontWeight.w600,
-                        color: AppTheme.textWhite,
+                        color: AppTheme.lightSurface,
                       ),
                     ),
                   ],

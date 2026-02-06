@@ -279,7 +279,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 height: 40,
                 decoration: BoxDecoration(
                   color: scheme.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(AppTheme.radius10),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
                   border: Border.all(color: scheme.primary.withValues(alpha: 0.20)),
                 ),
                 child: Icon(
@@ -296,7 +296,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     Text(
                       'Auto Update',
                       style: TextStyle(
-                        fontSize: AppTheme.fontSizeMedium,
+                        fontSize: AppTheme.fontMedium,
                         fontWeight: FontWeight.w800,
                         color: scheme.onSurface,
                       ),
@@ -305,7 +305,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     Text(
                       'Refresh wallpaper when push notification arrives',
                       style: TextStyle(
-                        fontSize: AppTheme.fontSizeBody,
+                        fontSize: AppTheme.fontBody,
                         color: scheme.onSurface.withValues(alpha: 0.72),
                         fontWeight: FontWeight.w600,
                       ),
@@ -380,7 +380,7 @@ class _SettingsPageState extends State<SettingsPage> {
           // Developer
           _buildSettingButton(
             icon: Icons.developer_mode,
-            iconColor: AppTheme.accentPurple,
+            iconColor: AppTheme.skyDuskAccent,
             title: 'Developer',
             subtitle: 'Adelli Rahulreddy',
             onTap: null, // Read-only
@@ -441,7 +441,7 @@ class _SettingsPageState extends State<SettingsPage> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
       child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppTheme.spacing4),
+                padding: const EdgeInsets.symmetric(vertical: AppTheme.spacing8),
         child: Row(
           children: [
             Container(
@@ -449,7 +449,7 @@ class _SettingsPageState extends State<SettingsPage> {
               height: 40,
               decoration: BoxDecoration(
                 color: iconColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(AppTheme.radius10),
+                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
               ),
               child: Icon(icon, color: iconColor, size: 20),
             ),
@@ -463,7 +463,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: AppTheme.textPrimary,
+                      color: AppTheme.lightText,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -471,7 +471,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     subtitle,
                     style: TextStyle(
                       fontSize: 12,
-                      color: AppTheme.textSecondary,
+                      color: AppTheme.lightText.withValues(alpha: 0.7),
                     ),
                   ),
                 ],
@@ -480,7 +480,7 @@ class _SettingsPageState extends State<SettingsPage> {
             if (trailing != null)
               Icon(
                 trailing,
-                color: AppTheme.textTertiary,
+                color: AppTheme.darkText,
                 size: 18,
               ),
           ],
@@ -514,7 +514,7 @@ class _SettingsPageState extends State<SettingsPage> {
             Text(
               'Logout',
               style: TextStyle(
-                fontSize: AppTheme.fontSizeLead,
+                fontSize: AppTheme.fontLarge,
                 fontWeight: FontWeight.w600,
               ),
             ),

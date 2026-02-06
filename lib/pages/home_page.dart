@@ -29,36 +29,15 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  static const int _daysInSixMonths = 180;
+  static const int _daysInSixMonths = AppConstants.dashboardHeatmapDays;
   static const int _trendDays = 30;
 
-
-
   Color _heatmapColor(int level) {
-    final ext = Theme.of(context).extension<AppThemeExtension>();
+    final ext = Theme.of(context).extension<AppThemeExt>();
     if (ext != null && level >= 0 && level < ext.heatmapLevels.length) {
       return ext.heatmapLevels[level];
     }
-    return AppThemeExtension.light().heatmapLevels[level.clamp(0, 4)];
-  }
-
-  TrendSummary _computeTrend(List<ContributionDay> days, {required int window}) {
-    if (days.isEmpty) {
-      return const TrendSummary(current: 0, previous: 0);
-    }
-
-    final sorted = List<ContributionDay>.from(days)
-      ..sort((a, b) => a.date.compareTo(b.date));
-
-    final List<int> counts = sorted.map((d) => d.contributionCount).toList();
-    final end = counts.length;
-    final start = (end - window).clamp(0, end);
-    final prevStart = (start - window).clamp(0, start);
-
-    final current = counts.sublist(start, end).fold<int>(0, (a, b) => a + b);
-    final previous =
-        counts.sublist(prevStart, start).fold<int>(0, (a, b) => a + b);
-    return TrendSummary(current: current, previous: previous);
+    return AppThemeExt(isLight: true).heatmapLevels[level.clamp(0, 4)];
   }
 
   List<ContributionDay> _sortedDays(List<ContributionDay> days) {
@@ -90,10 +69,20 @@ class _HomePageState extends State<HomePage> {
     final data = widget.data;
     final trend7d = data == null
         ? const TrendSummary(current: 0, previous: 0)
-        : _computeTrend(data.days, window: 7);
+        : ContributionAnalyzer.computeTrend(
+            data.days,
+            window: 7,
+            dateOf: (day) => day.date,
+            countOf: (day) => day.contributionCount,
+          );
     final trend30d = data == null
         ? const TrendSummary(current: 0, previous: 0)
-        : _computeTrend(data.days, window: 30);
+        : ContributionAnalyzer.computeTrend(
+            data.days,
+            window: 30,
+            dateOf: (day) => day.date,
+            countOf: (day) => day.contributionCount,
+          );
 
     final titleDate = DateFormat('EEEE, d MMMM').format(DateTime.now());
 
@@ -118,7 +107,7 @@ class _HomePageState extends State<HomePage> {
                   style: TextStyle(
                     color: scheme.onSurface.withValues(alpha: 0.60),
                     fontWeight: FontWeight.w700,
-                    fontSize: AppTheme.fontSizeCaption,
+                    fontSize: AppTheme.fontCaption,
                     letterSpacing: 1.1,
                   ),
                 ),
@@ -130,7 +119,7 @@ class _HomePageState extends State<HomePage> {
                         '${PresentationFormatter.getGreeting()}, $username',
                         style: TextStyle(
                           color: scheme.onSurface,
-                          fontSize: AppTheme.fontSizeTitle,
+                          fontSize: AppTheme.fontTitle,
                           fontWeight: FontWeight.w800,
                         ),
                         overflow: TextOverflow.ellipsis,
@@ -187,7 +176,7 @@ class _HomePageState extends State<HomePage> {
                               widget.loadError!,
                               style: TextStyle(
                                 color: scheme.onSurface.withValues(alpha: 0.72),
-                                fontSize: AppTheme.fontSizeBody,
+                                fontSize: AppTheme.fontBody,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -294,13 +283,13 @@ class _HomePageState extends State<HomePage> {
                   label: 'Current streak',
                   value: '${data.currentStreak}d',
                   icon: Icons.local_fire_department_rounded,
-                  iconColor: AppTheme.statOrange,
+                  iconColor: AppTheme.warningOrange,
                 ),
                 MetricTile(
                   label: 'Longest streak',
                   value: '${data.longestStreak}d',
                   icon: Icons.emoji_events_rounded,
-                  iconColor: AppTheme.statPurple,
+                  iconColor: AppTheme.skyDuskAccent,
                 ),
                 MetricTile(
                   label: 'Active repos',
@@ -362,7 +351,7 @@ class _HomePageState extends State<HomePage> {
                     'Less',
                     style: TextStyle(
                       color: scheme.onSurface.withValues(alpha: 0.70),
-                      fontSize: AppTheme.fontSizeCaption,
+                      fontSize: AppTheme.fontCaption,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -376,19 +365,19 @@ class _HomePageState extends State<HomePage> {
                       decoration: BoxDecoration(
                         color: _heatmapColor(i),
                         borderRadius:
-                            BorderRadius.circular(AppTheme.radiusXSmall),
+                            BorderRadius.circular(AppTheme.radiusSmall),
                         border: Border.all(
                           color: scheme.outline.withValues(alpha: 0.35),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: AppTheme.spacing4),
+                  const SizedBox(width: AppTheme.spacing8),
                   Text(
                     'More',
                     style: TextStyle(
                       color: scheme.onSurface.withValues(alpha: 0.70),
-                      fontSize: AppTheme.fontSizeCaption,
+                      fontSize: AppTheme.fontCaption,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -477,7 +466,7 @@ class _HomePageState extends State<HomePage> {
                                       label,
                                       style: TextStyle(
                                         color: scheme.onSurface,
-                                        fontSize: AppTheme.fontSizeTitle,
+                                        fontSize: AppTheme.fontTitle,
                                         fontWeight: FontWeight.w800,
                                       ),
                                     ),
@@ -487,7 +476,7 @@ class _HomePageState extends State<HomePage> {
                                       style: TextStyle(
                                         color: scheme.onSurface
                                             .withValues(alpha: 0.72),
-                                        fontSize: AppTheme.fontSizeLead,
+                                        fontSize: AppTheme.fontLarge,
                                         fontWeight: FontWeight.w700,
                                       ),
                                     ),
@@ -513,7 +502,7 @@ class _HomePageState extends State<HomePage> {
                 'Tap the chart to inspect a day.',
                 style: TextStyle(
                   color: scheme.onSurface.withValues(alpha: 0.60),
-                  fontSize: AppTheme.fontSizeCaption,
+                  fontSize: AppTheme.fontCaption,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -545,7 +534,7 @@ class _HomePageState extends State<HomePage> {
                     'No repository activity found for this period.',
                     style: TextStyle(
                       color: scheme.onSurface.withValues(alpha: 0.72),
-                      fontSize: AppTheme.fontSizeBody,
+                      fontSize: AppTheme.fontBody,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -590,7 +579,7 @@ class _HomePageState extends State<HomePage> {
                         style: TextStyle(
                           color: scheme.onSurface.withValues(alpha: 0.70),
                           fontWeight: FontWeight.w700,
-                          fontSize: AppTheme.fontSizeBody,
+                          fontSize: AppTheme.fontBody,
                         ),
                       ),
                     );
@@ -619,7 +608,7 @@ class _HomePageState extends State<HomePage> {
                   'No language data available for this period.',
                   style: TextStyle(
                     color: scheme.onSurface.withValues(alpha: 0.72),
-                    fontSize: AppTheme.fontSizeBody,
+                    fontSize: AppTheme.fontBody,
                     fontWeight: FontWeight.w600,
                   ),
                 )
@@ -682,7 +671,7 @@ class _HomePageState extends State<HomePage> {
                 'Weekend vs weekday',
                 style: TextStyle(
                   color: scheme.onSurface,
-                  fontSize: AppTheme.fontSizeLead,
+                  fontSize: AppTheme.fontLarge,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -732,7 +721,7 @@ class _HomePageState extends State<HomePage> {
                 'Impact levels',
                 style: TextStyle(
                   color: scheme.onSurface,
-                  fontSize: AppTheme.fontSizeLead,
+                  fontSize: AppTheme.fontLarge,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -781,31 +770,6 @@ class _HomePageState extends State<HomePage> {
 // SUB-WIDGETS
 // ══════════════════════════════════════════════════════════════════════
 
-@immutable
-class TrendSummary {
-  final int current;
-  final int previous;
-
-  const TrendSummary({
-    required this.current,
-    required this.previous,
-  });
-
-  double get deltaRatio {
-    if (previous <= 0) {
-      return current <= 0 ? 0.0 : 1.0;
-    }
-    return (current - previous) / previous;
-  }
-
-  String get deltaLabel {
-    final pct = (deltaRatio * 100).toStringAsFixed(0);
-    if (deltaRatio > 0) return '+$pct% vs prev';
-    if (deltaRatio < 0) return '$pct% vs prev';
-    return '0% vs prev';
-  }
-}
-
 class _MiniStat extends StatelessWidget {
   final String label;
   final String value;
@@ -836,7 +800,7 @@ class _MiniStat extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                fontSize: AppTheme.fontSizeBody,
+                fontSize: AppTheme.fontBody,
                 color: scheme.onSurface.withValues(alpha: 0.72),
                 fontWeight: FontWeight.w600,
               ),
@@ -853,7 +817,7 @@ class _MiniStat extends StatelessWidget {
                 Text(
                   ' ($pct)',
                   style: TextStyle(
-                    fontSize: AppTheme.fontSizeSmall,
+                    fontSize: AppTheme.fontSmall,
                     color: scheme.onSurface.withValues(alpha: 0.60),
                     fontWeight: FontWeight.w700,
                   ),
@@ -899,7 +863,7 @@ class _ImpactChip extends StatelessWidget {
               height: 10,
               decoration: BoxDecoration(
                 color: color,
-                borderRadius: BorderRadius.circular(AppTheme.radiusXSmall),
+                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
                 border: Border.all(
                   color: scheme.outline.withValues(alpha: 0.35),
                 ),
@@ -912,7 +876,7 @@ class _ImpactChip extends StatelessWidget {
                 style: TextStyle(
                   color: scheme.onSurface.withValues(alpha: 0.72),
                   fontWeight: FontWeight.w700,
-                  fontSize: AppTheme.fontSizeSmall,
+                  fontSize: AppTheme.fontSmall,
                 ),
               ),
             ),
@@ -1131,9 +1095,9 @@ class _ScrollableHeatmapGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Process data into weeks (last ~180 days)
-    final displayDays =
-        days.length > 180 ? days.sublist(days.length - 180) : days;
+    final displayDays = days.length > AppConstants.dashboardHeatmapDays
+        ? days.sublist(days.length - AppConstants.dashboardHeatmapDays)
+        : days;
     if (displayDays.isEmpty) {
       return const Center(child: Text('No activity data'));
     }
@@ -1158,7 +1122,7 @@ class _ScrollableHeatmapGrid extends StatelessWidget {
       scrollDirection: Axis.horizontal,
       reverse: true, // Show newest on the right
       itemCount: weeks.length,
-      separatorBuilder: (_, __) => const SizedBox(width: AppTheme.spacing4),
+      separatorBuilder: (_, __) => const SizedBox(width: AppTheme.spacing8),
       itemBuilder: (context, index) {
         // Reverse indexing logic for reverse list view
         // index 0 is the NEWEST week (last in our list)
@@ -1211,7 +1175,7 @@ class _HeatmapCell extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(AppTheme.radiusXSmall),
+          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
           onTap: () {
             showModalBottomSheet<void>(
               context: context,
@@ -1231,7 +1195,7 @@ class _HeatmapCell extends StatelessWidget {
                       Text(
                         dateStr,
                         style: const TextStyle(
-                          fontSize: AppTheme.fontSizeTitle,
+                          fontSize: AppTheme.fontTitle,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -1239,7 +1203,7 @@ class _HeatmapCell extends StatelessWidget {
                       Text(
                         '${day!.contributionCount} commits',
                         style: TextStyle(
-                          fontSize: AppTheme.fontSizeLead,
+                          fontSize: AppTheme.fontLarge,
                           color: scheme.onSurface.withValues(alpha: 0.72),
                           fontWeight: FontWeight.w600,
                         ),
@@ -1259,15 +1223,15 @@ class _HeatmapCell extends StatelessWidget {
             );
           },
           child: Container(
-            width: 22,
-            height: 22,
+            width: 28, 
+            height: 28,
             alignment: Alignment.center,
             child: Container(
               width: 18,
               height: 18,
               decoration: BoxDecoration(
                 color: color,
-                borderRadius: BorderRadius.circular(AppTheme.radiusXSmall),
+                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
                 border: Border.all(color: scheme.outline.withValues(alpha: 0.35)),
               ),
             ),

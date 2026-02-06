@@ -13,6 +13,7 @@ import 'firebase_options.dart';
 import 'app_utils.dart';
 import 'pages/onboarding_page.dart';
 import 'pages/main_nav_page.dart';
+import 'pages/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,7 +23,7 @@ void main() async {
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
-      systemNavigationBarColor: AppTheme.bgWhite,
+      systemNavigationBarColor: AppTheme.lightBg,
       systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
@@ -61,6 +62,7 @@ class _AppInitializerState extends State<AppInitializer> {
   bool _isInitialized = false;
   bool _isLoggedIn = false;
   String? _error;
+  double _initProgress = 0.0;
 
   @override
   void initState() {
@@ -69,6 +71,7 @@ class _AppInitializerState extends State<AppInitializer> {
   }
 
   Future<void> _startInitialization() async {
+    final startTime = DateTime.now();
     try {
       Object? storageError;
       StackTrace? storageStack;
@@ -77,6 +80,7 @@ class _AppInitializerState extends State<AppInitializer> {
         try {
           await StorageService.init().timeout(const Duration(seconds: 10));
           _storageReady = true;
+          if (mounted) setState(() => _initProgress = 0.3);
         } catch (e, stack) {
           storageError = e;
           storageStack = stack;
@@ -90,6 +94,7 @@ class _AppInitializerState extends State<AppInitializer> {
             options: DefaultFirebaseOptions.currentPlatform,
           ).timeout(const Duration(seconds: 15));
           _firebaseReady = true;
+          if (mounted) setState(() => _initProgress = 0.6);
 
           await FirebaseCrashlytics.instance
               .setCrashlyticsCollectionEnabled(!kDebugMode);
@@ -114,18 +119,25 @@ class _AppInitializerState extends State<AppInitializer> {
       if (_firebaseReady && !_firebaseServicesReady) {
         await _initFirebaseServices();
         _firebaseServicesReady = true;
+        if (mounted) setState(() => _initProgress = 0.8);
       }
 
       // 2 & 3. Remove delay and add timeout to AppConfig
-      await AppConfig.initializeFromPlatformDispatcher()
-          .timeout(const Duration(seconds: 5));
+      await AppConfig.initializeFromPlatformDispatcher().timeout(const Duration(seconds: 2), onTimeout: (){});
 
       final loggedIn = StorageService.isOnboardingComplete();
       final pendingWallpaperRefresh =
           loggedIn && StorageService.hasPendingWallpaperRefresh();
 
+      // Ensure minimum splash duration of 4 seconds
+      final elapsed = DateTime.now().difference(startTime);
+      if (elapsed < const Duration(seconds: 4)) {
+        await Future.delayed(const Duration(seconds: 4) - elapsed);
+      }
+
       if (mounted) {
         setState(() {
+          _initProgress = 1.0;
           _isLoggedIn = loggedIn;
           _isInitialized = true;
         });
@@ -133,9 +145,7 @@ class _AppInitializerState extends State<AppInitializer> {
 
       if (pendingWallpaperRefresh) {
         unawaited(() async {
-          final shouldRefresh =
-              await StorageService.consumePendingWallpaperRefresh();
-          if (!shouldRefresh) return;
+          await StorageService.consumePendingWallpaperRefresh();
           await WallpaperService.refreshWallpaper();
         }());
       }
@@ -186,51 +196,23 @@ class _AppInitializerState extends State<AppInitializer> {
   @override
   Widget build(BuildContext context) {
     if (_error != null) {
-      return Scaffold(
-        backgroundColor: AppTheme.bgLight,
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(AppTheme.spacing24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline_rounded,
-                    size: 48, color: AppTheme.errorRed),
-                const SizedBox(height: 16),
-                Text(
-                  _error!,
-                  style: const TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      _error = null;
-                      _isInitialized = false;
-                      _firebaseServicesReady = false;
-                    });
-                    _startInitialization();
-                  },
-                  child: Text(AppStrings.retry),
-                ),
-              ],
-            ),
-          ),
-        ),
+      return SplashScreen(
+        progress: _initProgress,
+        error: _error,
+        onRetry: () {
+          setState(() {
+            _error = null;
+            _initProgress = 0.0;
+            _isInitialized = false;
+            _firebaseServicesReady = false;
+          });
+          _startInitialization();
+        },
       );
     }
 
     if (!_isInitialized) {
-      return const Scaffold(
-        backgroundColor: AppTheme.bgLight,
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return SplashScreen(progress: _initProgress);
     }
 
     return _isLoggedIn ? const MainNavPage() : const OnboardingPage();
