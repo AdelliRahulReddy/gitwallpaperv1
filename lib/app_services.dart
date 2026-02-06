@@ -19,6 +19,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'app_exceptions.dart';
 import 'app_models.dart';
 import 'app_utils.dart';
+import 'app_state.dart'; // Phase 4: For RefreshPolicy
 import 'ui_render.dart';
 
 import 'firebase_options.dart';
@@ -984,13 +985,14 @@ class WallpaperService {
   }
 
   /// Trigger a full refresh of the wallpaper (Fetch -> Render -> Set)
+  ///
+  /// **Phase 4**: Now delegates ALL decisions to RefreshPolicy in app_state.dart
   static Future<RefreshResult> refreshWallpaper({
     bool isBackground = false,
   }) async {
     return await _updateLock.synchronized(() async {
       try {
-        if (!Platform.isAndroid && isBackground) return RefreshResult.noChanges;
-
+        // Initialize if background
         if (isBackground) {
           WidgetsFlutterBinding.ensureInitialized();
           if (Firebase.apps.isEmpty) {
@@ -1001,60 +1003,66 @@ class WallpaperService {
           await StorageService.init();
         }
 
-        // Check pending refresh flag
-        if (!isBackground && StorageService.hasPendingWallpaperRefresh()) {
-           final lastUpdate = StorageService.getLastUpdate();
-           // Fix: Avoid double-refresh if background job just finished
-           if (lastUpdate != null && DateTime.now().difference(lastUpdate).inMinutes < 2) {
-             debugPrint('Background refresh recently completed. Consuming flag without work.');
-             await StorageService.consumePendingWallpaperRefresh();
-             return RefreshResult.noChanges;
-           }
-          debugPrint('Consuming pending wallpaper refresh...');
-          await StorageService.consumePendingWallpaperRefresh();
-        }
+        // === DECISION PHASE: Delegate to RefreshPolicy ===
+        final decision = RefreshPolicy.shouldRefresh(
+          isBackground: isBackground,
+          isAndroid: Platform.isAndroid,
+          autoUpdateEnabled: StorageService.getAutoUpdate(),
+          hasPendingRefresh: StorageService.hasPendingWallpaperRefresh(),
+          lastUpdate: StorageService.getLastUpdate(),
+          username: StorageService.getUsername(),
+          token: await StorageService.getToken(),
+          hasConnectivity: await _hasConnectivity(),
+        );
 
-        if (!StorageService.getAutoUpdate() && isBackground) {
-          return RefreshResult.noChanges;
-        }
-
-        final lastUpdate = StorageService.getLastUpdate();
-        if (lastUpdate != null && isBackground) {
-          final diff = DateTime.now().difference(lastUpdate);
-          if (diff.inMinutes < AppConstants.refreshCooldownMinutes) {
-            return RefreshResult.throttled;
+        if (!decision.shouldProceed) {
+          // Convert string result to enum
+          final reason = decision.skipReason as String;
+          switch (reason) {
+            case 'throttled':
+              return RefreshResult.throttled;
+            case 'networkError':
+              return RefreshResult.networkError;
+            case 'authError':
+              return RefreshResult.authError;
+            default:
+              return RefreshResult.noChanges;
           }
         }
 
-        if (!await _hasConnectivity()) return RefreshResult.networkError;
+        // Consume pending flag if present
+        if (StorageService.hasPendingWallpaperRefresh()) {
+          await StorageService.consumePendingWallpaperRefresh();
+        }
 
-        final username = StorageService.getUsername();
-        final token = await StorageService.getToken();
+        // === EXECUTION PHASE: Service calls only ===
+        final username = StorageService.getUsername()!;
+        final token = (await StorageService.getToken())!;
 
-        if (username == null || token == null) return RefreshResult.authError;
-
+        // 1. Fetch data from GitHub
         CachedContributionData data;
         try {
           data = await GitHubService.fetchContributions(
             username: username,
             token: token,
           );
-          await StorageService.setCachedData(data);
-          await StorageService.setLastUpdate(AppDateUtils.nowUtc);
         } catch (e) {
           debugPrint('Fetch failed: $e');
           return RefreshResult.networkError;
         }
 
+        // 2. Save data to storage
+        await StorageService.setCachedData(data);
+        await StorageService.setLastUpdate(AppDateUtils.nowUtc);
+
+        // 3. Generate and set wallpaper
         final config = StorageService.getWallpaperConfig();
         final generated = await generateAndSetWallpaper(
           data: data,
           config: config,
         );
 
-        if (!generated) return RefreshResult.noChanges;
-
-        return RefreshResult.success;
+        return generated ? RefreshResult.success : RefreshResult.noChanges;
       } catch (e) {
         debugPrint('Wallpaper refresh failed: $e');
         return RefreshResult.unknownError;
