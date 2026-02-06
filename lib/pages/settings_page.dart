@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:github_wallpaper/app_services.dart';
 import 'package:github_wallpaper/app_theme.dart';
 import 'package:github_wallpaper/app_utils.dart';
+import 'package:github_wallpaper/app_state.dart';
 import 'package:github_wallpaper/pages/onboarding_page.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -115,13 +116,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  String _getTimeSince(DateTime date) {
-    final diff = DateTime.now().difference(date);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
-    if (diff.inHours < 24) return '${diff.inHours} hr ago';
-    return '${diff.inDays} days ago';
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -248,7 +243,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Last synced: ${_getTimeSince(_lastUpdate!)}',
+                    'Last synced: ${PresentationFormatter.formatTimeSince(_lastUpdate!)}',
                     style: TextStyle(
                       fontSize: 13,
                       color: scheme.onSurface.withValues(alpha: 0.72),

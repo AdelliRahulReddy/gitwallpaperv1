@@ -7,6 +7,7 @@ import 'package:github_wallpaper/app_services.dart';
 import 'package:github_wallpaper/app_models.dart';
 import 'package:github_wallpaper/app_theme.dart';
 import 'package:github_wallpaper/app_utils.dart';
+import 'package:github_wallpaper/app_state.dart';
 import 'package:intl/intl.dart';
 
 class HomePage extends StatefulWidget {
@@ -31,30 +32,7 @@ class _HomePageState extends State<HomePage> {
   static const int _daysInSixMonths = 180;
   static const int _trendDays = 30;
 
-  String _getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
-  }
 
-  String _formatCompactInt(int number) {
-    if (number >= 1000000) {
-      return '${(number / 1000000).toStringAsFixed(1)}m';
-    }
-    if (number >= 1000) {
-      return '${(number / 1000).toStringAsFixed(1)}k';
-    }
-    return '$number';
-  }
-
-  String _formatTimeAgo(DateTime date) {
-    final diff = DateTime.now().difference(date.toLocal());
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
-  }
 
   Color _heatmapColor(int level) {
     final ext = Theme.of(context).extension<AppThemeExtension>();
@@ -149,7 +127,7 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     Expanded(
                       child: Text(
-                        '${_getGreeting()}, $username',
+                        '${PresentationFormatter.getGreeting()}, $username',
                         style: TextStyle(
                           color: scheme.onSurface,
                           fontSize: AppTheme.fontSizeTitle,
@@ -271,7 +249,7 @@ class _HomePageState extends State<HomePage> {
     required TrendSummary trend30d,
   }) {
     final scheme = Theme.of(context).colorScheme;
-    final updated = 'Updated ${_formatTimeAgo(data.lastUpdated)}';
+    final updated = 'Updated ${PresentationFormatter.formatTimeAgoCompact(data.lastUpdated)}';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -302,7 +280,7 @@ class _HomePageState extends State<HomePage> {
               children: [
                 MetricTile(
                   label: 'Total commits',
-                  value: _formatCompactInt(data.totalContributions),
+                  value: PresentationFormatter.formatCompactNumber(data.totalContributions),
                   icon: Icons.commit_rounded,
                   iconColor: scheme.primary,
                 ),
@@ -338,14 +316,14 @@ class _HomePageState extends State<HomePage> {
                 ),
                 MetricTile(
                   label: '7-day trend',
-                  value: _formatCompactInt(trend7d.current),
+                  value: PresentationFormatter.formatCompactNumber(trend7d.current),
                   helper: trend7d.deltaLabel,
                   icon: Icons.show_chart_rounded,
                   iconColor: scheme.primary,
                 ),
                 MetricTile(
                   label: '30-day trend',
-                  value: _formatCompactInt(trend30d.current),
+                  value: PresentationFormatter.formatCompactNumber(trend30d.current),
                   helper: trend30d.deltaLabel,
                   icon: Icons.timeline_rounded,
                   iconColor: scheme.primary,
@@ -370,7 +348,7 @@ class _HomePageState extends State<HomePage> {
       children: [
         AppSectionHeader(
           title: 'Activity graph',
-          subtitle: 'Last 6 months • ${_formatCompactInt(total)} commits',
+          subtitle: 'Last 6 months • ${PresentationFormatter.formatCompactNumber(total)} commits',
         ),
         const SizedBox(height: AppTheme.spacing12),
         AppCard(
@@ -452,7 +430,7 @@ class _HomePageState extends State<HomePage> {
       children: [
         AppSectionHeader(
           title: 'Commit frequency',
-          subtitle: 'Last $_trendDays days • ${_formatCompactInt(total)} commits',
+          subtitle: 'Last $_trendDays days • ${PresentationFormatter.formatCompactNumber(total)} commits',
         ),
         const SizedBox(height: AppTheme.spacing12),
         AppCard(
@@ -608,7 +586,7 @@ class _HomePageState extends State<HomePage> {
                               ),
                             ),
                       trailing: Text(
-                        '${_formatCompactInt(r.commitCount)} commits',
+                        '${PresentationFormatter.formatCompactNumber(r.commitCount)} commits',
                         style: TextStyle(
                           color: scheme.onSurface.withValues(alpha: 0.70),
                           fontWeight: FontWeight.w700,
@@ -737,13 +715,13 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   _MiniStat(
                     label: 'Weekdays',
-                    value: _formatCompactInt(weekdayTotal),
+                    value: PresentationFormatter.formatCompactNumber(weekdayTotal),
                     pct: '${(weekdayPct * 100).toStringAsFixed(0)}%',
                     color: scheme.primary,
                   ),
                   _MiniStat(
                     label: 'Weekends',
-                    value: _formatCompactInt(weekendTotal),
+                    value: PresentationFormatter.formatCompactNumber(weekendTotal),
                     pct: '${(weekendPct * 100).toStringAsFixed(0)}%',
                     color: scheme.secondary,
                   ),
