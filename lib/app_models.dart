@@ -4,6 +4,8 @@
 
 import 'package:flutter/foundation.dart';
 import 'app_utils.dart';
+import 'app_state.dart'; // For ContributionAnalyzer
+
 
 int _toNonNegativeInt(dynamic value, {int fallback = 0}) {
   if (value is! num) return fallback;
@@ -164,152 +166,22 @@ class ContributionStats {
   });
 
   /// Calculate statistics from contribution days
+  ///
+  /// **Phase 1 Cleanup**: Delegates to ContributionAnalyzer to avoid duplication
   factory ContributionStats.fromDays(List<ContributionDay> days,
       {DateTime? nowUtc}) {
-    final dailyTotals = _buildDailyTotals(days);
-
-    if (dailyTotals.isEmpty) {
-      return const ContributionStats(
-        currentStreak: 0,
-        longestStreak: 0,
-        todayContributions: 0,
-        activeDaysCount: 0,
-        peakDayContributions: 0,
-        totalContributions: 0,
-        mostActiveWeekday: AppConstants.fallbackWeekday,
-      );
-    }
-
-    final today =
-        AppDateUtils.toDateOnlyUtc((nowUtc ?? AppDateUtils.nowUtc).toUtc());
-    final streaks = _calculateStreaks(dailyTotals, today: today);
-    final todayCount = dailyTotals[today] ?? 0;
-    final activeCount = dailyTotals.values.where((count) => count > 0).length;
-    final peak = dailyTotals.values.fold<int>(
-      0,
-      (maxCount, count) => count > maxCount ? count : maxCount,
-    );
-    final total = dailyTotals.values.fold<int>(0, (sum, count) => sum + count);
-    final weekday = _getMostActiveWeekday(dailyTotals);
-
+    // Delegate to ContributionAnalyzer (centralized business logic)
+    final stats = ContributionAnalyzer.analyzeContributions(days, nowUtc: nowUtc);
+    
     return ContributionStats(
-      currentStreak: streaks['current']!,
-      longestStreak: streaks['longest']!,
-      todayContributions: todayCount,
-      activeDaysCount: activeCount,
-      peakDayContributions: peak,
-      totalContributions: total,
-      mostActiveWeekday: weekday,
+      currentStreak: stats['currentStreak'] as int,
+      longestStreak: stats['longestStreak'] as int,
+      todayContributions: stats['todayContributions'] as int,
+      activeDaysCount: stats['activeDaysCount'] as int,
+      peakDayContributions: stats['peakDayContributions'] as int,
+      totalContributions: stats['totalContributions'] as int,
+      mostActiveWeekday: stats['mostActiveWeekday'] as String,
     );
-  }
-
-  /// Calculate current and longest streaks from contribution days
-  ///
-  /// Missing dates are treated as unknown (do not auto-reset streaks).
-  static Map<String, int> _calculateStreaks(Map<DateTime, int> dailyTotals,
-      {required DateTime today}) {
-    if (dailyTotals.isEmpty) return {'current': 0, 'longest': 0};
-
-    int longestStreakCount = 0;
-    int tempStreak = 0;
-
-    final sortedDates = dailyTotals.keys.toList()
-      ..sort((a, b) => a.compareTo(b));
-    final earliest = sortedDates.first;
-    final latest = sortedDates.last;
-    final expectedDays =
-        latest.difference(earliest).inDays >= 0 ? latest.difference(earliest).inDays + 1 : 0;
-    final coverage =
-        expectedDays <= 0 ? 1.0 : (dailyTotals.length / expectedDays);
-    final treatMissingAsZero = coverage < 0.90;
-
-    for (DateTime cursor = earliest;
-        !cursor.isAfter(latest);
-        cursor = cursor.add(const Duration(days: 1))) {
-      final count = dailyTotals[cursor];
-      if (count == null) {
-        if (treatMissingAsZero) {
-          tempStreak = 0;
-        }
-        continue;
-      }
-      if (count > 0) {
-        tempStreak++;
-        if (tempStreak > longestStreakCount) {
-          longestStreakCount = tempStreak;
-        }
-      } else {
-        tempStreak = 0;
-      }
-    }
-
-    int currentStreakCount = 0;
-
-    DateTime? anchor;
-    final todayCount = dailyTotals[today];
-    if (todayCount != null && todayCount > 0) {
-      anchor = today;
-    } else {
-      final yesterday = today.subtract(const Duration(days: 1));
-      final yesterdayCount = dailyTotals[yesterday];
-      if (yesterdayCount != null && yesterdayCount > 0) {
-        anchor = yesterday;
-      }
-    }
-
-    if (anchor != null) {
-      for (DateTime cursor = anchor;
-          !cursor.isBefore(earliest);
-          cursor = cursor.subtract(const Duration(days: 1))) {
-        final count = dailyTotals[cursor];
-        if (count == null) {
-          if (treatMissingAsZero) {
-            break;
-          }
-          continue;
-        }
-        if (count <= 0) {
-          break;
-        }
-        currentStreakCount++;
-      }
-    }
-
-    return {'current': currentStreakCount, 'longest': longestStreakCount};
-  }
-
-  static Map<DateTime, int> _buildDailyTotals(List<ContributionDay> days) {
-    final totals = <DateTime, int>{};
-    for (final day in days) {
-      final key = AppDateUtils.toDateOnlyUtc(day.date);
-      totals[key] = (totals[key] ?? 0) + day.contributionCount;
-    }
-    return totals;
-  }
-
-  /// Find most active weekday
-  static String _getMostActiveWeekday(Map<DateTime, int> dailyTotals) {
-    if (dailyTotals.isEmpty) return AppConstants.fallbackWeekday;
-
-    final weekdayCounts = List.filled(7, 0);
-    for (final entry in dailyTotals.entries) {
-      final weekday = entry.key.weekday;
-      if (weekday >= 1 && weekday <= 7) {
-        weekdayCounts[weekday - 1] += entry.value;
-      }
-    }
-
-    int maxIndex = 0;
-    int maxValue = weekdayCounts[0];
-    for (int i = 1; i < 7; i++) {
-      if (weekdayCounts[i] > maxValue) {
-        maxValue = weekdayCounts[i];
-        maxIndex = i;
-      }
-    }
-
-    const weekdays = AppConstants.weekdays;
-    return weekdays[maxIndex];
   }
 
   /// Average contributions per active day
