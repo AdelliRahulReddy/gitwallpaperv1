@@ -7,8 +7,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 
-import 'exceptions.dart';
-import 'theme.dart';
+import 'app_exceptions.dart';
+import 'app_theme.dart';
 
 // ══════════════════════════════════════════════════════════════════════════
 // ERROR HANDLER
@@ -25,9 +25,14 @@ class ErrorHandler {
     VoidCallback? onRetry,
   }) {
     final message = userMessage ?? getUserFriendlyMessage(error);
+    
+    // Internal logging for developers
+    debugPrint('ErrorHandler: Handling error: $error');
 
     if (showSnackBar && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.clearSnackBars();
+      messenger.showSnackBar(
         SnackBar(
           content: Text(message),
           backgroundColor: AppTheme.errorRed,
@@ -49,7 +54,9 @@ class ErrorHandler {
   static void showSuccess(BuildContext context, String message) {
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: AppTheme.successGreen,
@@ -190,7 +197,7 @@ class ValidationUtils {
     }
 
     // Reserved names
-    const reserved = ['admin', 'api', 'www', 'github', 'support'];
+    const reserved = ['admin', 'api', 'www', 'github', 'support', 'security', 'blog', 'explore', 'login', 'notifications', 'search', 'settings'];
     if (reserved.contains(trimmed.toLowerCase())) {
       return 'Username is reserved';
     }
@@ -205,10 +212,11 @@ class ValidationUtils {
     }
 
     final t = value.trim();
-    final isValid = t.length >= 10 && !t.contains(' ');
+    final isValid = t.length >= 10 && !t.contains(' ') && 
+                    RegExp(r'^(ghp_|github_pat_|gho_|ghu_|ghs_|ghr_).*').hasMatch(t);
     
     if (!isValid) {
-      return 'Invalid token format (use ghp_, github_pat_, or OAuth token)';
+      return 'Invalid token format (minimum 10 characters, no spaces)';
     }
 
     return null;
@@ -253,7 +261,16 @@ class AppDateUtils {
 
   /// Convert DateTime to date-only (strips time component)
   static DateTime toDateOnly(DateTime dt) {
+    return toDateOnlyLocal(dt);
+  }
+
+  static DateTime toDateOnlyLocal(DateTime dt) {
     return DateTime(dt.year, dt.month, dt.day);
+  }
+
+  static DateTime toDateOnlyUtc(DateTime dt) {
+    final utc = dt.toUtc();
+    return DateTime.utc(utc.year, utc.month, utc.day);
   }
 
   /// Format date as ISO date string (YYYY-MM-DD)
@@ -262,24 +279,31 @@ class AppDateUtils {
   }
 
   /// Create date key for map lookups (YYYY-MM-DD format)
-  static String createDateKey(DateTime date) {
-    // Audit Fix: Direct alias to avoid logic duplication
-    return toIsoDateString(date);
-  }
-
   static int _parseFailures = 0;
 
   /// Parse ISO date string to DateTime (date-only)
   static DateTime? parseIsoDate(String? dateStr) {
     if (dateStr == null) return null;
     try {
+      final ymd = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(dateStr);
+      if (ymd != null) {
+        final year = int.parse(ymd.group(1)!);
+        final month = int.parse(ymd.group(2)!);
+        final day = int.parse(ymd.group(3)!);
+        return DateTime.utc(year, month, day);
+      }
+
       final parsed = DateTime.parse(dateStr);
-      return toDateOnly(parsed);
+      return toDateOnlyUtc(parsed);
     } catch (e) {
       _parseFailures++;
-      // Audit Fix: Track failure rate (simple counter for now)
+      // Audit Fix: Track failure rate (reset at 100 to avoid overflow in long-running apps)
       if (_parseFailures % 10 == 0) {
-        debugPrint('⚠️ High Date Parse Failure Rate: $_parseFailures failures. Last error: $e');
+        debugPrint('⚠️ Date Parse Failure (Recent Count: $_parseFailures). Last error: $e');
+      }
+      if (_parseFailures >= 100) {
+        debugPrint('ℹ️ Date Parse Failure counter reset after 100 failures.');
+        _parseFailures = 0;
       }
       return null;
     }
@@ -383,6 +407,7 @@ class AppStrings {
   static const developer = 'DEVELOPED BY';
   static const developerName = 'Adelli Rahulreddy';
   static const developerTagline = 'Building tools for developers';
+  // WARNING: appVersion must be updated manually when pubspec.yaml version changes
   static const appVersion = '1.0.1';
 }
 
@@ -478,6 +503,7 @@ class AppConstants {
 
   static const String fcmTopicDailyUpdates = 'daily-updates';
 
+  // Weekdays 0-indexed (Mon=0, Sun=6) to match DateTime.weekday - 1
   static const List<String> weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   static const String fallbackWeekday = 'None';
 
@@ -497,7 +523,9 @@ class AppConstants {
   // ════════════════════════════════════════════════════════════════════════
   // UI LAYOUT BUFFERS
   // ════════════════════════════════════════════════════════════════════════
-  static const double clockAreaBuffer = 120.0;
+  static const double deviceClockBufferHeightFraction = 0.15;
+  static const double deviceClockBufferMinPx = 120.0;
+  static const double deviceClockBufferMaxPx = 300.0;
   static const double horizontalBuffer = 32.0;
 }
 
@@ -523,12 +551,13 @@ class RenderUtils {
     required Offset offset,
     required double maxWidth,
     TextAlign textAlign = TextAlign.left,
+    TextDirection textDirection = TextDirection.ltr,
     int? maxLines,
     bool paint = true,
   }) {
     final painter = TextPainter(
       text: TextSpan(text: text, style: style),
-      textDirection: TextDirection.ltr,
+      textDirection: textDirection,
       textAlign: textAlign,
       maxLines: maxLines,
     )..layout(maxWidth: maxWidth);
@@ -546,12 +575,15 @@ class RenderUtils {
   }
 
   /// Calculate contribution quartiles for dynamic intensity
+  /// 
+  /// NOTE: This performs filtering and sorting. Callers should cache the result 
+  /// (e.g. in [CachedContributionData]) to avoid redundant O(N log N) work.
   static Quartiles calculateQuartiles(List<int> counts) {
     // Filter non-zero contributions
     final nonZero = counts.where((c) => c > 0).toList()..sort();
     
     if (nonZero.isEmpty) {
-      return Quartiles(1, 2, 3); // Fallback defaults
+      return Quartiles(3, 6, 9); // Fallback defaults
     }
 
     // Calculate percentiles

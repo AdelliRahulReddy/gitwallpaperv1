@@ -4,9 +4,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:github_wallpaper/services.dart';
-import 'package:github_wallpaper/rendering.dart';
+import 'package:github_wallpaper/ui_render.dart';
 import 'package:github_wallpaper/models.dart';
-import 'package:github_wallpaper/theme.dart';
+import 'package:github_wallpaper/app_theme.dart';
 import 'package:github_wallpaper/utils.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:io';
@@ -78,15 +78,16 @@ class _CustomizePageState extends State<CustomizePage> {
       base: _config,
       target: _previewTarget,
     );
-    final targetWidth =
-        wallpaperWidth - effectiveConfig.paddingLeft - effectiveConfig.paddingRight;
+    final targetWidth = wallpaperWidth -
+        effectiveConfig.paddingLeft -
+        effectiveConfig.paddingRight;
     // Preview always uses month calendar (7 columns)
     const columns = AppConstants.monthGridColumns;
     final baseGraphWidth =
         (AppConstants.heatmapBoxSize + AppConstants.heatmapBoxSpacing) *
                 columns -
             AppConstants.heatmapBoxSpacing;
-    
+
     // Increased max scale from 3.0 to 8.0 to support Month view (Lock screen) correctly
     final newScale = (targetWidth / baseGraphWidth).clamp(0.5, 8.0);
 
@@ -189,10 +190,12 @@ class _CustomizePageState extends State<CustomizePage> {
       return _buildNoDataState();
     }
 
+    final scheme = Theme.of(context).colorScheme;
     final media = MediaQuery.of(context);
     final viewportHeight = media.size.height;
     final isLandscape = media.orientation == Orientation.landscape;
-    final previewPanelHeight = (viewportHeight * (isLandscape ? 0.72 : 0.55)).clamp(
+    final previewPanelHeight =
+        (viewportHeight * (isLandscape ? 0.72 : 0.55)).clamp(
       viewportHeight * (isLandscape ? 0.60 : 0.50),
       viewportHeight * (isLandscape ? 0.82 : 0.60),
     );
@@ -204,10 +207,13 @@ class _CustomizePageState extends State<CustomizePage> {
         vertical: AppTheme.spacing16,
       ),
       decoration: BoxDecoration(
-        color: AppTheme.bgLight,
+        color: scheme.surface,
+        border: Border(
+          bottom: BorderSide(color: scheme.outline.withValues(alpha: 0.55)),
+        ),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.textPrimary.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
@@ -217,7 +223,7 @@ class _CustomizePageState extends State<CustomizePage> {
     );
 
     final controlsPanel = Container(
-      color: AppTheme.bgWhite,
+      color: Theme.of(context).scaffoldBackgroundColor,
       child: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -226,17 +232,17 @@ class _CustomizePageState extends State<CustomizePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Customize',
-                style: TextStyle(
-                  fontSize: AppTheme.fontSizeHeadline,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                ),
+              AppSectionHeader(
+                title: 'Customize',
+                subtitle: _deviceName,
+                trailing: Icon(Icons.wallpaper_rounded, color: scheme.primary),
               ),
-              const SizedBox(height: AppTheme.spacing12),
+              const SizedBox(height: AppTheme.spacing16),
               // Theme toggle removed
-              _buildCustomizationSection(),
+              AppCard(
+                padding: const EdgeInsets.all(AppTheme.spacing16),
+                child: _buildCustomizationSection(),
+              ),
               const SizedBox(height: AppTheme.spacing32),
               _buildApplyButton(),
               const SizedBox(height: AppTheme.spacing32),
@@ -341,8 +347,10 @@ class _CustomizePageState extends State<CustomizePage> {
   Widget _buildPreviewSection() {
     final dims = StorageService.getDimensions();
     var wallpaperWidth = dims?['width'] ?? AppConstants.defaultWallpaperWidth;
-    var wallpaperHeight = dims?['height'] ?? AppConstants.defaultWallpaperHeight;
-    final wallpaperPixelRatio = dims?['pixelRatio'] ?? AppConstants.defaultPixelRatio;
+    var wallpaperHeight =
+        dims?['height'] ?? AppConstants.defaultWallpaperHeight;
+    final wallpaperPixelRatio =
+        dims?['pixelRatio'] ?? AppConstants.defaultPixelRatio;
 
     final physicalWidth = (wallpaperWidth * wallpaperPixelRatio).round();
     final physicalHeight = (wallpaperHeight * wallpaperPixelRatio).round();
@@ -391,7 +399,8 @@ class _CustomizePageState extends State<CustomizePage> {
                     children: [
                       RepaintBoundary(
                         child: CustomPaint(
-                          key: ValueKey('${_config.hashCode}_${_previewTarget.name}'),
+                          key: ValueKey(
+                              '${_config.hashCode}_${_previewTarget.name}'),
                           painter: _WallpaperPreviewPainter(
                             data: widget.data!,
                             wallpaperWidth: wallpaperWidth,
@@ -524,7 +533,8 @@ class _CustomizePageState extends State<CustomizePage> {
               TextButton.icon(
                 onPressed: _fitToWidth,
                 icon: const Icon(Icons.fit_screen, size: 16),
-                label: const Text('Fit Width', style: TextStyle(fontSize: AppTheme.fontSizeBody)),
+                label: const Text('Fit Width',
+                    style: TextStyle(fontSize: AppTheme.fontSizeBody)),
                 style: TextButton.styleFrom(
                   padding: EdgeInsets.zero,
                   visualDensity: VisualDensity.compact,
@@ -596,8 +606,16 @@ class _CustomizePageState extends State<CustomizePage> {
             },
           ),
           const SizedBox(height: AppTheme.spacing20),
+          const Text(
+            'Layout automatically reserves space for the status bar/notch and lock-screen clock. Position controls are applied after that.',
+            style: TextStyle(
+              fontSize: AppTheme.fontSizeCaption,
+              color: AppTheme.textTertiary,
+            ),
+          ),
+          const SizedBox(height: AppTheme.spacing12),
           _buildSlider(
-            label: 'Position (Vertical)',
+            label: 'Position (Vertical, within safe area)',
             value: _config.verticalPosition,
             min: 0.0,
             max: 1.0,
@@ -608,7 +626,7 @@ class _CustomizePageState extends State<CustomizePage> {
           ),
           const SizedBox(height: AppTheme.spacing20),
           _buildSlider(
-            label: 'Position (Horizontal)',
+            label: 'Position (Horizontal, within safe area)',
             value: _config.horizontalPosition,
             min: 0.0,
             max: 1.0,
@@ -731,7 +749,7 @@ class _CustomizePageState extends State<CustomizePage> {
   Widget _buildSystemUiGuides(double previewScale) {
     // Only show for Lock Screen mode to avoid clutter
     // 100% Unified: Guides now relevant for all targets since they share the same layout
-    // if (_previewTarget != WallpaperTarget.lock) return const SizedBox.shrink(); 
+    // if (_previewTarget != WallpaperTarget.lock) return const SizedBox.shrink();
 
     final safeInsets = StorageService.getSafeInsets();
     if (safeInsets == EdgeInsets.zero) return const SizedBox.shrink();
@@ -744,13 +762,17 @@ class _CustomizePageState extends State<CustomizePage> {
             top: 0,
             left: 0,
             right: 0,
-            height: safeInsets.top * previewScale + 60, // Padding + space for clock
+            height:
+                safeInsets.top * previewScale + 60, // Padding + space for clock
             child: Container(
               color: Colors.red.withValues(alpha: 0.1),
               child: const Center(
                 child: Text(
                   'SYSTEM CLOCK AREA',
-                  style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      color: Colors.red,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -766,7 +788,10 @@ class _CustomizePageState extends State<CustomizePage> {
               child: const Center(
                 child: Text(
                   'GESTURE AREA',
-                  style: TextStyle(color: Colors.blue, fontSize: 10, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      color: Colors.blue,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -810,7 +835,6 @@ class _WallpaperPreviewPainter extends CustomPainter {
       size: wallpaperSize,
       data: data,
       config: config,
-      pixelRatio: 1.0,
     );
     canvas.restore();
   }

@@ -2,10 +2,11 @@
 // 🧭 MAIN NAVIGATION PAGE - Shell for Home, Customize, Settings
 // ══════════════════════════════════════════════════════════════════════════
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:github_wallpaper/services.dart';
 import 'package:github_wallpaper/models.dart';
-import 'package:github_wallpaper/theme.dart';
 import 'package:github_wallpaper/utils.dart';
 
 // Import sub-pages
@@ -55,7 +56,7 @@ class _MainNavPageState extends State<MainNavPage> with WidgetsBindingObserver {
     if (!mounted) return;
 
     // Re-save device dimensions (may have changed on rotate/resize)
-    await AppConfig.initializeFromContext(context);
+    await AppConfig.initializeFromPlatformDispatcher();
     if (!mounted) return;
 
     // Refresh data if needed when app resumes
@@ -80,13 +81,13 @@ class _MainNavPageState extends State<MainNavPage> with WidgetsBindingObserver {
     try {
       // 1. Try to load from cache
       final cached = StorageService.getCachedData();
-      
+
       if (cached != null) {
         // Check if cache is "complete" (has at least 3 months of data)
         if (cached.days.length < 90) {
-           await _syncData(force: true);
+          await _syncData(force: true);
         } else {
-           setState(() {
+          setState(() {
             _data = cached;
             _loadError = null;
             _isLoading = false;
@@ -149,7 +150,7 @@ class _MainNavPageState extends State<MainNavPage> with WidgetsBindingObserver {
           _data = newData;
           _isLoading = false;
         });
-        
+
         if (!silent) {
           ErrorHandler.showSuccess(context, 'Data synced successfully');
         }
@@ -175,7 +176,7 @@ class _MainNavPageState extends State<MainNavPage> with WidgetsBindingObserver {
 
     try {
       final config = StorageService.getWallpaperConfig();
-      
+
       // Convert string to WallpaperTarget enum
       WallpaperTarget targetEnum;
       switch (target) {
@@ -188,15 +189,20 @@ class _MainNavPageState extends State<MainNavPage> with WidgetsBindingObserver {
         default:
           targetEnum = WallpaperTarget.both;
       }
-      
+
       await WallpaperService.generateAndSetWallpaper(
         data: _data!,
         config: config,
         target: targetEnum,
       );
-      
+
       if (mounted) {
-        ErrorHandler.showSuccess(context, 'Wallpaper updated successfully! 🎨');
+        if (Platform.isAndroid) {
+          ErrorHandler.showSuccess(context, AppStrings.wallpaperApplied);
+        } else {
+          ErrorHandler.showSuccess(
+              context, 'Wallpaper image generated successfully');
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -213,6 +219,7 @@ class _MainNavPageState extends State<MainNavPage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     // Screens
     final List<Widget> screens = [
       HomePage(
@@ -230,47 +237,33 @@ class _MainNavPageState extends State<MainNavPage> with WidgetsBindingObserver {
     ];
 
     return Scaffold(
-      backgroundColor: AppTheme.bgLight,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: IndexedStack(
           index: _selectedIndex,
           children: screens,
         ),
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.primaryBlue.withValues(alpha: 0.1),
-              blurRadius: 20,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: NavigationBar(
-          selectedIndex: _selectedIndex,
-          onDestinationSelected: _onItemTapped,
-          backgroundColor: AppTheme.bgWhite,
-          elevation: 0,
-          indicatorColor: AppTheme.primaryBlue.withValues(alpha: 0.1),
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.dashboard_outlined),
-              selectedIcon: Icon(Icons.dashboard, color: AppTheme.primaryBlue),
-              label: 'Dashboard',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.palette_outlined),
-              selectedIcon: Icon(Icons.palette, color: AppTheme.primaryBlue),
-              label: 'Customize',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.settings_outlined),
-              selectedIcon: Icon(Icons.settings, color: AppTheme.primaryBlue),
-              label: 'Settings',
-            ),
-          ],
-        ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: _onItemTapped,
+        destinations: [
+          NavigationDestination(
+            icon: const Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard, color: scheme.primary),
+            label: 'Dashboard',
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.palette_outlined),
+            selectedIcon: Icon(Icons.palette, color: scheme.primary),
+            label: 'Customize',
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings, color: scheme.primary),
+            label: 'Settings',
+          ),
+        ],
       ),
     );
   }

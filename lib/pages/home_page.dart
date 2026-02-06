@@ -5,7 +5,8 @@
 import 'package:flutter/material.dart';
 import 'package:github_wallpaper/services.dart';
 import 'package:github_wallpaper/models.dart';
-import 'package:github_wallpaper/theme.dart';
+import 'package:github_wallpaper/app_theme.dart';
+import 'package:github_wallpaper/utils.dart';
 import 'package:intl/intl.dart';
 
 class HomePage extends StatefulWidget {
@@ -27,22 +28,8 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // Motivation quotes for the "Daily Inspiration" card
-  static const List<String> _quotes = [
-    "Code is poetry written with logic.",
-    "Consistency is the key to mastery.",
-    "Small commits every day lead to big changes.",
-    "Don't wish for it, work for it.",
-    "Your future is created by what you do today.",
-    "Focus on progress, not perfection.",
-    "Every error is a learning opportunity.",
-    "Build things that matter.",
-  ];
-
-  String _getRandomQuote() {
-    final index = DateTime.now().day % _quotes.length;
-    return _quotes[index];
-  }
+  static const int _daysInSixMonths = 180;
+  static const int _trendDays = 30;
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
@@ -51,369 +38,22 @@ class _HomePageState extends State<HomePage> {
     return 'Good Evening';
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final username = StorageService.getUsername() ?? 'Developer';
-
-    if (widget.isLoading && widget.data == null) {
-      return _buildLoadingState();
+  String _formatCompactInt(int number) {
+    if (number >= 1000000) {
+      return '${(number / 1000000).toStringAsFixed(1)}m';
     }
-
-    if (widget.loadError != null && widget.data == null) {
-      return _buildErrorState();
-    }
-
-    return RefreshIndicator(
-      onRefresh: widget.onRefresh,
-      color: AppTheme.primaryBlue,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Column(
-          children: [
-            // 1. Production Header
-            _buildDashboardHeader(username),
-            if (widget.isLoading)
-              const LinearProgressIndicator(
-                minHeight: 2,
-                backgroundColor: AppTheme.bgWhite,
-                color: AppTheme.primaryBlue,
-              ),
-
-            // 2. Main Content
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppTheme.spacing20, vertical: AppTheme.spacing24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (widget.loadError != null && widget.data != null) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(AppTheme.spacing16),
-                      decoration: BoxDecoration(
-                        color: AppTheme.warningOrange.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-                        border: Border.all(
-                          color: AppTheme.warningOrange.withValues(alpha: 0.25),
-                        ),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(
-                            Icons.info_outline_rounded,
-                            color: AppTheme.warningOrange,
-                            size: 18,
-                          ),
-                          const SizedBox(width: AppTheme.spacing12),
-                          Expanded(
-                            child: Text(
-                              widget.loadError!,
-                              style: const TextStyle(
-                                fontSize: AppTheme.fontSizeBase,
-                                color: AppTheme.textSecondary,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppTheme.spacing20),
-                  ],
-                  if (widget.data != null) ...[
-                    // New: Today's Hero Card
-                    _buildTodayHeroCard(widget.data!),
-                    const SizedBox(height: AppTheme.spacing24),
-
-                    // Stats Grid
-                    _buildStatsGrid(widget.data!),
-
-                    const SizedBox(height: AppTheme.spacing24),
-
-                    // Heatmap
-                    _buildHeatmapContainer(widget.data!),
-
-                    const SizedBox(height: AppTheme.spacing24),
-
-                    // Weekend vs Weekday
-                    _buildWeekendAnalysis(widget.data!),
-
-                    const SizedBox(height: AppTheme.spacing24),
-
-                    // Contribution Level Breakdown
-                    _buildContributionBreakdown(widget.data!),
-
-                    const SizedBox(height: AppTheme.spacing24),
-
-                    // Motivation Card
-                    _buildMotivationCard(),
-                  ],
-                  const SizedBox(height: 80), // Bottom padding
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  // HEADER
-  // ══════════════════════════════════════════════════════════════════════
-
-  Widget _buildDashboardHeader(String username) {
-    final dateStr = DateFormat('EEEE, d MMMM').format(DateTime.now());
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(
-          AppTheme.spacing24, AppTheme.spacing24, AppTheme.spacing24, AppTheme.spacing24),
-      decoration: BoxDecoration(
-        color: AppTheme.bgLight,
-        borderRadius: const BorderRadius.vertical(
-            bottom: Radius.circular(AppTheme.radius2XLarge)),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.textPrimary.withValues(alpha: 0.03),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Greeting & Date
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  dateStr.toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: AppTheme.fontSizeBody,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.0,
-                    color: AppTheme.textTertiary,
-                  ),
-                ),
-                const SizedBox(height: AppTheme.spacing4),
-                Text(
-                  '${_getGreeting()},',
-                  style: const TextStyle(
-                    fontSize: AppTheme.fontSizeTitle,
-                    fontWeight: FontWeight.w400,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-                Text(
-                  username,
-                  style: const TextStyle(
-                    fontSize: AppTheme.fontSizeDisplay,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
-                    height: 1.1,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Avatar / Profile Icon
-          Container(
-            padding: const EdgeInsets.all(AppTheme.spacing3),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-              color: AppTheme.primaryBlue.withValues(alpha: 0.2),
-                  width: 2),
-            ),
-            child: CircleAvatar(
-              radius: 26,
-              backgroundColor: AppTheme.primaryBlue.withValues(alpha: 0.1),
-              child: const Icon(Icons.person_rounded,
-                  color: AppTheme.primaryBlue, size: 28),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  // TODAY HERO CARD
-  // ══════════════════════════════════════════════════════════════════════
-
-  Widget _buildTodayHeroCard(CachedContributionData data) {
-    // Determine status
-    String status = "Ready to Start";
-    Color statusColor = AppTheme.textSecondary;
-    IconData statusIcon = Icons.hourglass_empty;
-
-    if (data.todayCommits > 0) {
-      status = "On Track";
-      statusColor = AppTheme.successGreen;
-      statusIcon = Icons.check_circle;
-    }
-    if (data.todayCommits >= 5) {
-      status = "On Fire!";
-      statusColor = AppTheme.statOrange;
-      statusIcon = Icons.local_fire_department;
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppTheme.spacing20),
-      decoration: BoxDecoration(
-        color: AppTheme.bgLight,
-        gradient: const LinearGradient(
-          colors: [AppTheme.githubDarkBg, AppTheme.githubDarkCard],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(AppTheme.radius2XLarge),
-        boxShadow: AppTheme.cardShadow,
-      ),
-      child: Row(
-        children: [
-          // Circular Progress or Icon
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: statusColor.withValues(alpha: 0.2),
-              border: Border.all(
-                  color: statusColor.withValues(alpha: 0.5), width: 2),
-            ),
-            child: Center(
-              child: Text(
-                '${data.todayCommits}',
-                style: TextStyle(
-                  fontSize: AppTheme.fontSizeHeadline,
-                  fontWeight: FontWeight.bold,
-                  color: statusColor,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: AppTheme.spacing20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Today's Contribution",
-                  style: const TextStyle(
-                    fontSize: AppTheme.fontSizeBase,
-                    color: AppTheme.whiteMuted,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: AppTheme.spacing4),
-                Row(
-                  children: [
-                    Icon(statusIcon, color: statusColor, size: 18),
-                    const SizedBox(width: AppTheme.spacing8),
-                    Text(
-                      status,
-                      style: const TextStyle(
-                        fontSize: AppTheme.fontSizeTitle,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.textWhite,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  // STATS GRID
-  // ══════════════════════════════════════════════════════════════════════
-
-  Widget _buildStatsGrid(CachedContributionData data) {
-    return Column(
-      children: [
-        // Row 1: 3-Column Key Stats
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _StatCard(
-                label: 'Streak',
-                value: '${data.currentStreak}',
-                icon: Icons.local_fire_department_rounded,
-                iconColor: AppTheme.statOrange,
-                isCompact: true,
-              ),
-            ),
-            const SizedBox(width: AppTheme.spacing12),
-            Expanded(
-              child: _StatCard(
-                label: 'Best',
-                value: '${data.longestStreak}',
-                icon: Icons.emoji_events_rounded,
-                iconColor: AppTheme.statAmber,
-                isCompact: true,
-              ),
-            ),
-            const SizedBox(width: AppTheme.spacing12),
-            Expanded(
-              child: _StatCard(
-                label: 'Total',
-                value: _formatCompact(data.totalContributions),
-                icon: Icons.diamond_rounded,
-                iconColor: AppTheme.statBlue,
-                isCompact: true,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppTheme.spacing12),
-
-        // Row 2: 2-Column Insights
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _StatCard(
-                label: 'Peak Day',
-                value: '${data.peakDay}',
-                suffix: ' commits',
-                icon: Icons.landscape_rounded,
-                iconColor: AppTheme.statPurple,
-                bgColor: AppTheme.bgWhite,
-              ),
-            ),
-            const SizedBox(width: AppTheme.spacing12),
-            Expanded(
-              child: _StatCard(
-                label: 'Active Day',
-                value: data.mostActiveWeekday,
-                icon: Icons.calendar_today_rounded,
-                iconColor: AppTheme.statTeal,
-                bgColor: AppTheme.bgWhite,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  String _formatCompact(int number) {
     if (number >= 1000) {
       return '${(number / 1000).toStringAsFixed(1)}k';
     }
     return '$number';
+  }
+
+  String _formatTimeAgo(DateTime date) {
+    final diff = DateTime.now().difference(date.toLocal());
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 
   Color _heatmapColor(int level) {
@@ -424,53 +64,713 @@ class _HomePageState extends State<HomePage> {
     return AppThemeExtension.light().heatmapLevels[level.clamp(0, 4)];
   }
 
-  // ══════════════════════════════════════════════════════════════════════
-  // HEATMAP (Real Grid)
-  // ══════════════════════════════════════════════════════════════════════
+  TrendSummary _computeTrend(List<ContributionDay> days, {required int window}) {
+    if (days.isEmpty) {
+      return const TrendSummary(current: 0, previous: 0);
+    }
 
-  Widget _buildHeatmapContainer(CachedContributionData data) {
-    final displayDays =
-        data.days.length > 180 ? data.days.sublist(data.days.length - 180) : data.days;
-    final displayTotal = displayDays.fold<int>(
-      0,
-      (sum, d) => sum + d.contributionCount,
+    final sorted = List<ContributionDay>.from(days)
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    final List<int> counts = sorted.map((d) => d.contributionCount).toList();
+    final end = counts.length;
+    final start = (end - window).clamp(0, end);
+    final prevStart = (start - window).clamp(0, start);
+
+    final current = counts.sublist(start, end).fold<int>(0, (a, b) => a + b);
+    final previous =
+        counts.sublist(prevStart, start).fold<int>(0, (a, b) => a + b);
+    return TrendSummary(current: current, previous: previous);
+  }
+
+  List<ContributionDay> _sortedDays(List<ContributionDay> days) {
+    final sorted = List<ContributionDay>.from(days)
+      ..sort((a, b) => a.date.compareTo(b.date));
+    return sorted;
+  }
+
+  List<ContributionDay> _lastDays(List<ContributionDay> days, int count) {
+    if (days.isEmpty) return const [];
+    final sorted = _sortedDays(days);
+    final start = (sorted.length - count).clamp(0, sorted.length);
+    return sorted.sublist(start);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final username = StorageService.getUsername() ?? 'Developer';
+
+    if (widget.isLoading && widget.data == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (widget.loadError != null && widget.data == null) {
+      return _buildErrorState();
+    }
+
+    final data = widget.data;
+    final trend7d = data == null
+        ? const TrendSummary(current: 0, previous: 0)
+        : _computeTrend(data.days, window: 7);
+    final trend30d = data == null
+        ? const TrendSummary(current: 0, previous: 0)
+        : _computeTrend(data.days, window: 30);
+
+    final titleDate = DateFormat('EEEE, d MMMM').format(DateTime.now());
+
+    return RefreshIndicator(
+      onRefresh: widget.onRefresh,
+      color: scheme.primary,
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverAppBar(
+            pinned: true,
+            automaticallyImplyLeading: false,
+            backgroundColor: scheme.surface,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            titleSpacing: AppTheme.spacing20,
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  titleDate.toUpperCase(),
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.60),
+                    fontWeight: FontWeight.w700,
+                    fontSize: AppTheme.fontSizeCaption,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${_getGreeting()}, $username',
+                        style: TextStyle(
+                          color: scheme.onSurface,
+                          fontSize: AppTheme.fontSizeTitle,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: AppTheme.spacing12),
+                    IconButton(
+                      tooltip: 'Refresh',
+                      onPressed: widget.isLoading ? null : widget.onRefresh,
+                      icon: Icon(
+                        Icons.refresh_rounded,
+                        color: scheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            bottom: widget.isLoading
+                ? PreferredSize(
+                    preferredSize: const Size.fromHeight(2),
+                    child: LinearProgressIndicator(
+                      minHeight: 2,
+                      backgroundColor: scheme.surfaceContainerHighest,
+                      color: scheme.primary,
+                    ),
+                  )
+                : null,
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppTheme.spacing20,
+              AppTheme.spacing16,
+              AppTheme.spacing20,
+              AppTheme.spacing32,
+            ),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate(
+                [
+                  if (widget.loadError != null && data != null) ...[
+                    AppCard(
+                      padding: const EdgeInsets.all(AppTheme.spacing16),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.info_outline_rounded,
+                            color: scheme.secondary,
+                            size: 18,
+                          ),
+                          const SizedBox(width: AppTheme.spacing12),
+                          Expanded(
+                            child: Text(
+                              widget.loadError!,
+                              style: TextStyle(
+                                color: scheme.onSurface.withValues(alpha: 0.72),
+                                fontSize: AppTheme.fontSizeBody,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppTheme.spacing16),
+                  ],
+                  if (data == null) ...[
+                    AppCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppSectionHeader(
+                            title: 'No data yet',
+                            subtitle: 'Pull to refresh to sync your GitHub activity.',
+                          ),
+                          const SizedBox(height: AppTheme.spacing16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton(
+                              onPressed: widget.onRefresh,
+                              child: const Text('Sync Now'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    _buildOverview(
+                      data,
+                      trend7d: trend7d,
+                      trend30d: trend30d,
+                    ),
+                    const SizedBox(height: AppTheme.spacing20),
+                    _buildTrendsSection(data),
+                    const SizedBox(height: AppTheme.spacing20),
+                    _buildHeatmapSection(data),
+                    const SizedBox(height: AppTheme.spacing20),
+                    _buildRepositoriesSection(data),
+                    const SizedBox(height: AppTheme.spacing20),
+                    _buildLanguagesSection(data),
+                    const SizedBox(height: AppTheme.spacing20),
+                    _buildActivityInsights(data),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
+  }
+
+  Widget _buildOverview(
+    CachedContributionData data, {
+    required TrendSummary trend7d,
+    required TrendSummary trend30d,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final updated = 'Updated ${_formatTimeAgo(data.lastUpdated)}';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Activity Graph',
-              style: TextStyle(
-                fontSize: AppTheme.fontSizeTitle,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-            Text(
-              'Last 6 Months',
-              style: const TextStyle(
-                fontSize: AppTheme.fontSizeBody,
-                color: AppTheme.textTertiary,
-              ),
-            ),
-          ],
+        AppSectionHeader(
+          title: 'Overview',
+          subtitle: updated,
+          trailing: FilledButton.tonalIcon(
+            onPressed: widget.onRefresh,
+            icon: const Icon(Icons.sync_rounded, size: 18),
+            label: const Text('Sync'),
+          ),
         ),
-        const SizedBox(height: AppTheme.spacing16),
-        Semantics(
-          label:
-              'Activity graph for the last 6 months. Total contributions: $displayTotal. Current streak: ${data.stats.currentStreak} days. Longest streak: ${data.stats.longestStreak} days.',
-          child: Container(
-            height: 200,
-            width: double.infinity,
-            decoration: AppTheme.whiteCard(),
-            padding: const EdgeInsets.all(AppTheme.spacing16),
-            child: displayDays.isEmpty
-                ? const Center(child: Text("No activity data available"))
-                : _ScrollableHeatmapGrid(days: displayDays, heatmapColor: _heatmapColor),
+        const SizedBox(height: AppTheme.spacing12),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final w = constraints.maxWidth;
+            final crossAxisCount = w >= 980 ? 4 : w >= 680 ? 3 : 2;
+            final aspect = w >= 680 ? 1.9 : 1.75;
+
+            return GridView.count(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: AppTheme.spacing12,
+              mainAxisSpacing: AppTheme.spacing12,
+              childAspectRatio: aspect,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                MetricTile(
+                  label: 'Total commits',
+                  value: _formatCompactInt(data.totalContributions),
+                  icon: Icons.commit_rounded,
+                  iconColor: scheme.primary,
+                ),
+                MetricTile(
+                  label: 'Today',
+                  value: '${data.todayCommits}',
+                  icon: Icons.today_rounded,
+                  iconColor: scheme.secondary,
+                ),
+                MetricTile(
+                  label: 'Current streak',
+                  value: '${data.currentStreak}d',
+                  icon: Icons.local_fire_department_rounded,
+                  iconColor: AppTheme.statOrange,
+                ),
+                MetricTile(
+                  label: 'Longest streak',
+                  value: '${data.longestStreak}d',
+                  icon: Icons.emoji_events_rounded,
+                  iconColor: AppTheme.statPurple,
+                ),
+                MetricTile(
+                  label: 'Active repos',
+                  value: '${data.activeRepositoriesCount}',
+                  icon: Icons.inventory_2_rounded,
+                  iconColor: scheme.primary,
+                ),
+                MetricTile(
+                  label: 'Active days',
+                  value: '${data.activeDaysCount}',
+                  icon: Icons.event_available_rounded,
+                  iconColor: scheme.secondary,
+                ),
+                MetricTile(
+                  label: '7-day trend',
+                  value: _formatCompactInt(trend7d.current),
+                  helper: trend7d.deltaLabel,
+                  icon: Icons.show_chart_rounded,
+                  iconColor: scheme.primary,
+                ),
+                MetricTile(
+                  label: '30-day trend',
+                  value: _formatCompactInt(trend30d.current),
+                  helper: trend30d.deltaLabel,
+                  icon: Icons.timeline_rounded,
+                  iconColor: scheme.primary,
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeatmapSection(CachedContributionData data) {
+    final scheme = Theme.of(context).colorScheme;
+    final days = data.days.length > _daysInSixMonths
+        ? data.days.sublist(data.days.length - _daysInSixMonths)
+        : data.days;
+    final total = days.fold<int>(0, (sum, d) => sum + d.contributionCount);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppSectionHeader(
+          title: 'Activity graph',
+          subtitle: 'Last 6 months • ${_formatCompactInt(total)} commits',
+        ),
+        const SizedBox(height: AppTheme.spacing12),
+        AppCard(
+          padding: const EdgeInsets.all(AppTheme.spacing16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    'Less',
+                    style: TextStyle(
+                      color: scheme.onSurface.withValues(alpha: 0.70),
+                      fontSize: AppTheme.fontSizeCaption,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: AppTheme.spacing8),
+                  ...List.generate(
+                    5,
+                    (i) => Container(
+                      width: 12,
+                      height: 12,
+                      margin: const EdgeInsets.only(right: 4),
+                      decoration: BoxDecoration(
+                        color: _heatmapColor(i),
+                        borderRadius:
+                            BorderRadius.circular(AppTheme.radiusXSmall),
+                        border: Border.all(
+                          color: scheme.outline.withValues(alpha: 0.35),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppTheme.spacing4),
+                  Text(
+                    'More',
+                    style: TextStyle(
+                      color: scheme.onSurface.withValues(alpha: 0.70),
+                      fontSize: AppTheme.fontSizeCaption,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppTheme.spacing12),
+              SizedBox(
+                height: 200,
+                child: days.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No activity data available',
+                          style: TextStyle(
+                            color: scheme.onSurface.withValues(alpha: 0.70),
+                          ),
+                        ),
+                      )
+                    : _ScrollableHeatmapGrid(
+                        days: days,
+                        quartiles: data.quartiles,
+                        heatmapColor: _heatmapColor,
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTrendsSection(CachedContributionData data) {
+    final scheme = Theme.of(context).colorScheme;
+    final days = _lastDays(data.days, _trendDays);
+    final values = days.map((d) => d.contributionCount.toDouble()).toList();
+    final total = days.fold<int>(0, (a, d) => a + d.contributionCount);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppSectionHeader(
+          title: 'Commit frequency',
+          subtitle: 'Last $_trendDays days • ${_formatCompactInt(total)} commits',
+        ),
+        const SizedBox(height: AppTheme.spacing12),
+        AppCard(
+          padding: const EdgeInsets.all(AppTheme.spacing16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: 130,
+                child: values.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No recent activity to chart.',
+                          style: TextStyle(
+                            color: scheme.onSurface.withValues(alpha: 0.72),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      )
+                    : _SparklineChart(
+                        values: values,
+                        lineColor: scheme.primary,
+                        fillColor: scheme.primary,
+                        onIndexSelected: (index) {
+                          final day = days[index];
+                          final label = DateFormat('EEE, d MMM')
+                              .format(day.date.toLocal());
+                          showModalBottomSheet<void>(
+                            context: context,
+                            backgroundColor: scheme.surface,
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(AppTheme.radiusLarge),
+                              ),
+                            ),
+                            builder: (context) => SafeArea(
+                              child: Padding(
+                                padding: const EdgeInsets.all(AppTheme.spacing20),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      label,
+                                      style: TextStyle(
+                                        color: scheme.onSurface,
+                                        fontSize: AppTheme.fontSizeTitle,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: AppTheme.spacing12),
+                                    Text(
+                                      '${day.contributionCount} commits',
+                                      style: TextStyle(
+                                        color: scheme.onSurface
+                                            .withValues(alpha: 0.72),
+                                        fontSize: AppTheme.fontSizeLead,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: AppTheme.spacing20),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(),
+                                        child: const Text('Close'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              const SizedBox(height: AppTheme.spacing12),
+              Text(
+                'Tap the chart to inspect a day.',
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.60),
+                  fontSize: AppTheme.fontSizeCaption,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRepositoriesSection(CachedContributionData data) {
+    final scheme = Theme.of(context).colorScheme;
+    final repos = data.repositories.take(6).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppSectionHeader(
+          title: 'Active repositories',
+          subtitle: '${data.activeRepositoriesCount} repositories with commits',
+        ),
+        const SizedBox(height: AppTheme.spacing12),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: repos.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.all(AppTheme.spacing20),
+                  child: Text(
+                    'No repository activity found for this period.',
+                    style: TextStyle(
+                      color: scheme.onSurface.withValues(alpha: 0.72),
+                      fontSize: AppTheme.fontSizeBody,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                )
+              : ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: repos.length,
+                  separatorBuilder: (_, __) => Divider(
+                    height: 1,
+                    color: scheme.outline.withValues(alpha: 0.55),
+                  ),
+                  itemBuilder: (context, index) {
+                    final r = repos[index];
+                    final lang = r.primaryLanguageName;
+                    return ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.spacing16,
+                        vertical: 6,
+                      ),
+                      title: Text(
+                        r.nameWithOwner,
+                        style: TextStyle(
+                          color: scheme.onSurface,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: lang == null || lang.isEmpty
+                          ? null
+                          : Text(
+                              lang,
+                              style: TextStyle(
+                                color: scheme.onSurface.withValues(alpha: 0.70),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                      trailing: Text(
+                        '${_formatCompactInt(r.commitCount)} commits',
+                        style: TextStyle(
+                          color: scheme.onSurface.withValues(alpha: 0.70),
+                          fontWeight: FontWeight.w700,
+                          fontSize: AppTheme.fontSizeBody,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLanguagesSection(CachedContributionData data) {
+    final scheme = Theme.of(context).colorScheme;
+    final langs = data.topLanguages;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const AppSectionHeader(
+          title: 'Top languages',
+          subtitle: 'Estimated from your active repositories',
+        ),
+        const SizedBox(height: AppTheme.spacing12),
+        AppCard(
+          child: langs.isEmpty
+              ? Text(
+                  'No language data available for this period.',
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.72),
+                    fontSize: AppTheme.fontSizeBody,
+                    fontWeight: FontWeight.w600,
+                  ),
+                )
+              : Column(
+                  children: [
+                    for (final l in langs) ...[
+                      _LanguageRow(
+                        name: l.name,
+                        color: _parseHexColor(l.color) ?? scheme.primary,
+                        percent: l.percent,
+                      ),
+                      if (l != langs.last)
+                        const SizedBox(height: AppTheme.spacing12),
+                    ],
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActivityInsights(CachedContributionData data) {
+    final scheme = Theme.of(context).colorScheme;
+    int weekendTotal = 0;
+    int weekdayTotal = 0;
+    final levels = [0, 0, 0, 0, 0];
+
+    for (final day in data.days) {
+      if (day.date.weekday >= 6) {
+        weekendTotal += day.contributionCount;
+      } else {
+        weekdayTotal += day.contributionCount;
+      }
+
+      if (day.contributionCount == 0) continue;
+      final level = RenderUtils.getContributionLevel(
+        day.contributionCount,
+        quartiles: data.quartiles,
+      );
+      if (level >= 0 && level < levels.length) levels[level]++;
+    }
+
+    final total = weekendTotal + weekdayTotal;
+    final weekendPct = total > 0 ? weekendTotal / total : 0.0;
+    final weekdayPct = total > 0 ? weekdayTotal / total : 0.0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const AppSectionHeader(
+          title: 'Activity insights',
+          subtitle: 'Patterns across your recent contribution history',
+        ),
+        const SizedBox(height: AppTheme.spacing12),
+        AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Weekend vs weekday',
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontSize: AppTheme.fontSizeLead,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: AppTheme.spacing12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                child: SizedBox(
+                  height: 12,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: total > 0
+                            ? ((weekdayPct * 100).toInt()).clamp(1, 99)
+                            : 1,
+                        child: Container(color: scheme.primary),
+                      ),
+                      Expanded(
+                        flex: total > 0
+                            ? ((weekendPct * 100).toInt()).clamp(1, 99)
+                            : 1,
+                        child: Container(color: scheme.secondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppTheme.spacing12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _MiniStat(
+                    label: 'Weekdays',
+                    value: _formatCompactInt(weekdayTotal),
+                    pct: '${(weekdayPct * 100).toStringAsFixed(0)}%',
+                    color: scheme.primary,
+                  ),
+                  _MiniStat(
+                    label: 'Weekends',
+                    value: _formatCompactInt(weekendTotal),
+                    pct: '${(weekendPct * 100).toStringAsFixed(0)}%',
+                    color: scheme.secondary,
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppTheme.spacing20),
+              Text(
+                'Impact levels',
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontSize: AppTheme.fontSizeLead,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: AppTheme.spacing12),
+              Row(
+                children: [
+                  _ImpactChip(label: 'Low', count: levels[1], color: _heatmapColor(1)),
+                  const SizedBox(width: AppTheme.spacing8),
+                  _ImpactChip(label: 'Med', count: levels[2], color: _heatmapColor(2)),
+                  const SizedBox(width: AppTheme.spacing8),
+                  _ImpactChip(label: 'High', count: levels[3], color: _heatmapColor(3)),
+                  const SizedBox(width: AppTheme.spacing8),
+                  _ImpactChip(label: 'Max', count: levels[4], color: _heatmapColor(4)),
+                ],
+              ),
+            ],
           ),
         ),
       ],
@@ -478,77 +778,72 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  // WEEKEND & LEVELS
+  // LOADING & ERROR STATES
   // ══════════════════════════════════════════════════════════════════════
 
-  Widget _buildWeekendAnalysis(CachedContributionData data) {
-    int weekendTotal = 0;
-    int weekdayTotal = 0;
-
-    for (var day in data.days) {
-      if (day.date.weekday >= 6) {
-        weekendTotal += day.contributionCount;
-      } else {
-        weekdayTotal += day.contributionCount;
-      }
-    }
-
-    final total = weekendTotal + weekdayTotal;
-    final weekendPct = total > 0 ? weekendTotal / total : 0.0;
-    final weekdayPct = total > 0 ? weekdayTotal / total : 0.0;
-
-    return Container(
-      padding: const EdgeInsets.all(AppTheme.spacing20),
-      decoration: AppTheme.whiteCard(),
+  Widget _buildErrorState() {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text(
-            'Weekend Warrior?',
-            style: TextStyle(
-              fontSize: AppTheme.fontSizeTitle,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
-            ),
-          ),
+          Icon(Icons.error_outline, size: 48, color: scheme.error),
           const SizedBox(height: AppTheme.spacing16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-            child: SizedBox(
-              height: 12,
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: total > 0 ? ((weekdayPct * 100).toInt()).clamp(1, 99) : 1,
-                    child: Container(color: AppTheme.primaryBlue),
-                  ),
-                  Expanded(
-                    flex: total > 0 ? ((weekendPct * 100).toInt()).clamp(1, 99) : 1,
-                    child: Container(color: AppTheme.statOrange),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: AppTheme.spacing12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildMiniStat(
-                  'Weekdays',
-                  '$weekdayTotal',
-                  '${(weekdayPct * 100).toStringAsFixed(0)}%',
-                  AppTheme.primaryBlue),
-              _buildMiniStat('Weekends', '$weekendTotal',
-                  '${(weekendPct * 100).toStringAsFixed(0)}%', AppTheme.statOrange),
-            ],
-          ),
+          Text(widget.loadError ?? 'Unknown error',
+              style: TextStyle(color: scheme.onSurface.withValues(alpha: 0.72))),
+          const SizedBox(height: AppTheme.spacing16),
+          FilledButton(onPressed: widget.onRefresh, child: const Text('Retry')),
         ],
       ),
     );
   }
+}
 
-  Widget _buildMiniStat(String label, String value, String pct, Color color) {
+// ══════════════════════════════════════════════════════════════════════
+// SUB-WIDGETS
+// ══════════════════════════════════════════════════════════════════════
+
+@immutable
+class TrendSummary {
+  final int current;
+  final int previous;
+
+  const TrendSummary({
+    required this.current,
+    required this.previous,
+  });
+
+  double get deltaRatio {
+    if (previous <= 0) {
+      return current <= 0 ? 0.0 : 1.0;
+    }
+    return (current - previous) / previous;
+  }
+
+  String get deltaLabel {
+    final pct = (deltaRatio * 100).toStringAsFixed(0);
+    if (deltaRatio > 0) return '+$pct% vs prev';
+    if (deltaRatio < 0) return '$pct% vs prev';
+    return '0% vs prev';
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final String pct;
+  final Color color;
+
+  const _MiniStat({
+    required this.label,
+    required this.value,
+    required this.pct,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
         Container(
@@ -560,18 +855,31 @@ class _HomePageState extends State<HomePage> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label,
-                style: const TextStyle(
-                    fontSize: AppTheme.fontSizeBody, color: AppTheme.textSecondary)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: AppTheme.fontSizeBody,
+                color: scheme.onSurface.withValues(alpha: 0.72),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             Row(
               children: [
-                Text(value,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.textPrimary)),
-                Text(' ($pct)',
-                    style: const TextStyle(
-                        fontSize: AppTheme.fontSizeSmall, color: AppTheme.textTertiary)),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                Text(
+                  ' ($pct)',
+                  style: TextStyle(
+                    fontSize: AppTheme.fontSizeSmall,
+                    color: scheme.onSurface.withValues(alpha: 0.60),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
           ],
@@ -579,296 +887,267 @@ class _HomePageState extends State<HomePage> {
       ],
     );
   }
-
-  Widget _buildContributionBreakdown(CachedContributionData data) {
-    final levels = [0, 0, 0, 0, 0]; // 0, 1, 2, 3, 4
-
-    for (var day in data.days) {
-      if (day.contributionCount == 0) continue;
-      // Using intensityLevel getter from ContributionDay (0-4)
-      if (day.intensityLevel >= 0 && day.intensityLevel < levels.length) {
-        levels[day.intensityLevel]++;
-      }
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Impact Level',
-          style: TextStyle(
-            fontSize: AppTheme.fontSizeTitle,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        const SizedBox(height: AppTheme.spacing16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _buildLevelCard(
-                'Low', '${levels[1]}', _heatmapColor(1)),
-            _buildLevelCard(
-                'Med', '${levels[2]}', _heatmapColor(2)),
-            _buildLevelCard(
-                'High', '${levels[3]}', _heatmapColor(3)),
-            _buildLevelCard(
-                'Max', '${levels[4]}', _heatmapColor(4)),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLevelCard(String label, String count, Color color) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: AppTheme.spacing4),
-        padding: const EdgeInsets.symmetric(vertical: AppTheme.spacing12),
-        decoration: BoxDecoration(
-          color: AppTheme.bgWhite,
-          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Text(count,
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: AppTheme.fontSizeLead,
-                    color: AppTheme.textPrimary)),
-            const SizedBox(height: AppTheme.spacing4),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: AppTheme.fontSizeSmall, color: AppTheme.textSecondary)),
-            const SizedBox(height: AppTheme.spacing8),
-            Container(
-                width: 20,
-                height: AppTheme.spacing4,
-                decoration: BoxDecoration(
-                    color: color, borderRadius: BorderRadius.circular(AppTheme.radiusXSmall))),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  // MOTIVATION CARD
-  // ══════════════════════════════════════════════════════════════════════
-
-  Widget _buildMotivationCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppTheme.spacing24),
-      decoration: BoxDecoration(
-        color: AppTheme.githubDarkBg,
-        borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.githubDarkBg.withValues(alpha: 0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 10),
-          ),
-        ],
-        gradient: const RadialGradient(
-          center: Alignment.topRight,
-          radius: 1.5,
-          colors: [AppTheme.githubDarkCard, AppTheme.githubDarkBg],
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.format_quote_rounded,
-              color: AppTheme.whiteSubtle, size: 30),
-          const SizedBox(height: AppTheme.spacing8),
-          Text(
-            _getRandomQuote(),
-            style: const TextStyle(
-              color: AppTheme.textWhite,
-              fontSize: AppTheme.fontSizeLead,
-              fontWeight: FontWeight.w500,
-              height: 1.5,
-              fontFamily: 'Georgia',
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-          const SizedBox(height: AppTheme.spacing16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppTheme.spacing12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppTheme.textWhite.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
-                  border: Border.all(color: AppTheme.whiteBorder),
-                ),
-                child: const Text(
-                  'Daily Insight',
-                  style: TextStyle(
-                    color: AppTheme.whiteMuted,
-                    fontSize: AppTheme.fontSizeCaption,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  // LOADING & ERROR STATES
-  // ══════════════════════════════════════════════════════════════════════
-
-  Widget _buildLoadingState() {
-    return const Center(child: CircularProgressIndicator());
-  }
-
-  Widget _buildErrorState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.error_outline, size: 48, color: AppTheme.errorRed),
-          const SizedBox(height: AppTheme.spacing16),
-          Text(widget.loadError ?? 'Unknown error',
-              style: const TextStyle(color: AppTheme.textSecondary)),
-          const SizedBox(height: AppTheme.spacing16),
-          ElevatedButton(
-              onPressed: widget.onRefresh, child: const Text('Retry')),
-        ],
-      ),
-    );
-  }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// SUB-WIDGETS
-// ══════════════════════════════════════════════════════════════════════
-
-class _StatCard extends StatelessWidget {
+class _ImpactChip extends StatelessWidget {
   final String label;
-  final String value;
-  final String? suffix;
-  final IconData icon;
-  final Color iconColor;
-  final Color bgColor;
-  final bool isCompact;
+  final int count;
+  final Color color;
 
-  const _StatCard({
+  const _ImpactChip({
     required this.label,
-    required this.value,
-    this.suffix,
-    required this.icon,
-    required this.iconColor,
-    this.bgColor = AppTheme.bgWhite,
-    this.isCompact = false,
+    required this.count,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: BoxConstraints(minHeight: isCompact ? 100 : 120),
-      padding: EdgeInsets.all(isCompact ? AppTheme.spacing12 : AppTheme.spacing16),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-        boxShadow: AppTheme.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        mainAxisSize: MainAxisSize.max,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-            ),
-            child: Icon(
-              icon,
-              size: isCompact ? 18 : 20,
-              color: iconColor,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Flexible(
-                    child: Text(
-                      value,
-                      style: TextStyle(
-                        fontSize: isCompact ? AppTheme.fontSizeXLarge : AppTheme.fontSizeHeadline,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.textPrimary,
-                        height: 1.1,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (suffix != null && !isCompact)
-                    Flexible(
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: AppTheme.spacing4),
-                        child: Text(
-                          suffix!,
-                          style: const TextStyle(
-                            fontSize: AppTheme.fontSizeCaption,
-                            fontWeight: FontWeight.w500,
-                            color: AppTheme.textTertiary,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                ],
+    final scheme = Theme.of(context).colorScheme;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppTheme.spacing12,
+          vertical: AppTheme.spacing12,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+          border: Border.all(color: scheme.outline.withValues(alpha: 0.65)),
+          color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(AppTheme.radiusXSmall),
+                border: Border.all(
+                  color: scheme.outline.withValues(alpha: 0.35),
+                ),
               ),
-              const SizedBox(height: 4),
-              Text(
+            ),
+            const SizedBox(width: AppTheme.spacing8),
+            Expanded(
+              child: Text(
                 label,
                 style: TextStyle(
-                  fontSize: isCompact ? AppTheme.fontSizeSmall : AppTheme.fontSizeBody,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.textSecondary,
+                  color: scheme.onSurface.withValues(alpha: 0.72),
+                  fontWeight: FontWeight.w700,
+                  fontSize: AppTheme.fontSizeSmall,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
-            ],
-          ),
-        ],
+            ),
+            Text(
+              '$count',
+              style: TextStyle(
+                color: scheme.onSurface,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
+class _LanguageRow extends StatelessWidget {
+  final String name;
+  final Color color;
+  final double percent;
+
+  const _LanguageRow({
+    required this.name,
+    required this.color,
+    required this.percent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final pctLabel = '${(percent * 100).toStringAsFixed(0)}%';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: AppTheme.spacing8),
+            Expanded(
+              child: Text(
+                name,
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Text(
+              pctLabel,
+              style: TextStyle(
+                color: scheme.onSurface.withValues(alpha: 0.72),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppTheme.spacing8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+          child: LinearProgressIndicator(
+            value: percent.clamp(0.0, 1.0),
+            minHeight: 10,
+            backgroundColor: scheme.surfaceContainerHighest,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SparklineChart extends StatelessWidget {
+  final List<double> values;
+  final Color lineColor;
+  final Color fillColor;
+  final ValueChanged<int> onIndexSelected;
+
+  const _SparklineChart({
+    required this.values,
+    required this.lineColor,
+    required this.fillColor,
+    required this.onIndexSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (details) {
+            final dx = details.localPosition.dx.clamp(0.0, width);
+            final t = width <= 0 ? 0.0 : (dx / width);
+            final raw = (t * (values.length - 1));
+            onIndexSelected(raw.round().clamp(0, values.length - 1));
+          },
+          child: CustomPaint(
+            size: Size(width, constraints.maxHeight),
+            painter: _SparklinePainter(
+              values: values,
+              lineColor: lineColor,
+              fillColor: fillColor,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SparklinePainter extends CustomPainter {
+  final List<double> values;
+  final Color lineColor;
+  final Color fillColor;
+
+  _SparklinePainter({
+    required this.values,
+    required this.lineColor,
+    required this.fillColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.isEmpty || values.length == 1) return;
+    if (size.width <= 0 || size.height <= 0) return;
+
+    final minV = values.reduce((a, b) => a < b ? a : b);
+    final maxV = values.reduce((a, b) => a > b ? a : b);
+    final range = (maxV - minV).abs();
+
+    Offset pointAt(int i) {
+      final t = i / (values.length - 1);
+      final x = t * size.width;
+      final normalized = range <= 0 ? 0.0 : ((values[i] - minV) / range);
+      final y = size.height - (normalized * size.height);
+      return Offset(x, y);
+    }
+
+    final path = Path()..moveTo(pointAt(0).dx, pointAt(0).dy);
+    for (var i = 1; i < values.length; i++) {
+      final p = pointAt(i);
+      path.lineTo(p.dx, p.dy);
+    }
+
+    final fillPath = Path.from(path)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          fillColor.withValues(alpha: 0.22),
+          fillColor.withValues(alpha: 0.02),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+
+    canvas.drawPath(fillPath, fillPaint);
+
+    final linePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..color = lineColor;
+
+    canvas.drawPath(path, linePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SparklinePainter oldDelegate) {
+    return oldDelegate.values != values ||
+        oldDelegate.lineColor != lineColor ||
+        oldDelegate.fillColor != fillColor;
+  }
+}
+
+Color? _parseHexColor(String? hex) {
+  if (hex == null) return null;
+  final cleaned = hex.trim();
+  if (cleaned.isEmpty) return null;
+  final normalized = cleaned.startsWith('#') ? cleaned.substring(1) : cleaned;
+  final value = int.tryParse(normalized, radix: 16);
+  if (value == null) return null;
+  if (normalized.length == 6) {
+    return Color(0xFF000000 | value);
+  }
+  if (normalized.length == 8) {
+    return Color(value);
+  }
+  return null;
+}
+
 class _ScrollableHeatmapGrid extends StatelessWidget {
   final List<ContributionDay> days;
+  final Quartiles quartiles;
   final Color Function(int level) heatmapColor;
 
   const _ScrollableHeatmapGrid({
     required this.days,
+    required this.quartiles,
     required this.heatmapColor,
   });
 
@@ -911,7 +1190,11 @@ class _ScrollableHeatmapGrid extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: List.generate(7, (dayIndex) {
             final day = weekData[dayIndex];
-            return _HeatmapCell(day: day, heatmapColor: heatmapColor);
+            return _HeatmapCell(
+              day: day,
+              quartiles: quartiles,
+              heatmapColor: heatmapColor,
+            );
           }),
         );
       },
@@ -922,10 +1205,12 @@ class _ScrollableHeatmapGrid extends StatelessWidget {
 
 class _HeatmapCell extends StatelessWidget {
   final ContributionDay? day;
+  final Quartiles quartiles;
   final Color Function(int level) heatmapColor;
 
   const _HeatmapCell({
     required this.day,
+    required this.quartiles,
     required this.heatmapColor,
   });
 
@@ -935,7 +1220,8 @@ class _HeatmapCell extends StatelessWidget {
       return const SizedBox.square(dimension: 22);
     }
 
-    final color = _getColorForLevel(day!.contributionCount);
+    final scheme = Theme.of(context).colorScheme;
+    final color = _getColorForLevel(day!.contributionCount, quartiles);
 
     // Format date carefully
     final dateStr =
@@ -951,7 +1237,7 @@ class _HeatmapCell extends StatelessWidget {
           onTap: () {
             showModalBottomSheet<void>(
               context: context,
-              backgroundColor: AppTheme.bgWhite,
+              backgroundColor: scheme.surface,
               shape: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.vertical(
                   top: Radius.circular(AppTheme.radiusLarge),
@@ -969,15 +1255,14 @@ class _HeatmapCell extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: AppTheme.fontSizeTitle,
                           fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
                         ),
                       ),
                       const SizedBox(height: AppTheme.spacing12),
                       Text(
                         '${day!.contributionCount} commits',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: AppTheme.fontSizeLead,
-                          color: AppTheme.textSecondary,
+                          color: scheme.onSurface.withValues(alpha: 0.72),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -1005,6 +1290,7 @@ class _HeatmapCell extends StatelessWidget {
               decoration: BoxDecoration(
                 color: color,
                 borderRadius: BorderRadius.circular(AppTheme.radiusXSmall),
+                border: Border.all(color: scheme.outline.withValues(alpha: 0.35)),
               ),
             ),
           ),
@@ -1013,11 +1299,8 @@ class _HeatmapCell extends StatelessWidget {
     );
   }
 
-  Color _getColorForLevel(int count) {
-    if (count == 0) return AppTheme.bgLight.withValues(alpha: 0.5);
-    if (count <= 3) return heatmapColor(1);
-    if (count <= 6) return heatmapColor(2);
-    if (count <= 9) return heatmapColor(3);
-    return heatmapColor(4);
+  Color _getColorForLevel(int count, Quartiles quartiles) {
+    final level = RenderUtils.getContributionLevel(count, quartiles: quartiles);
+    return heatmapColor(level);
   }
 }

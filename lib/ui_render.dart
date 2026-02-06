@@ -1,9 +1,8 @@
-
 import 'package:flutter/material.dart';
 import 'models.dart';
 import 'utils.dart';
 
-import 'theme.dart';
+import 'app_theme.dart';
 
 // ══════════════════════════════════════════════════════════════════════════
 // 📐 GRAPH LAYOUT
@@ -11,7 +10,8 @@ import 'theme.dart';
 
 class GraphLayoutCalculator {
   static double baseGridWidth(int columns) {
-    final baseCell = AppConstants.heatmapBoxSize + AppConstants.heatmapBoxSpacing;
+    final baseCell =
+        AppConstants.heatmapBoxSize + AppConstants.heatmapBoxSpacing;
     return (columns * baseCell) - AppConstants.heatmapBoxSpacing;
   }
 
@@ -42,13 +42,16 @@ class MonthHeatmapCell {
 }
 
 class MonthHeatmapRenderer {
+  static final AppThemeExtension _lightTheme = AppThemeExtension.light();
+  static final AppThemeExtension _darkTheme = AppThemeExtension.dark();
+
   static List<MonthHeatmapCell> computeMonthCells({DateTime? referenceDate}) {
-    // Audit Fix: Use UTC reference date to match GitHub data
-    final ref = referenceDate ?? AppDateUtils.nowUtc;
+    final ref = (referenceDate ?? AppDateUtils.nowUtc).toUtc();
     final days = AppDateUtils.daysInMonth(ref.year, ref.month);
     return List<MonthHeatmapCell>.generate(
       days,
-      (i) => MonthHeatmapCell(date: DateTime(ref.year, ref.month, i + 1), dayIndex: i),
+      (i) => MonthHeatmapCell(
+          date: DateTime.utc(ref.year, ref.month, i + 1), dayIndex: i),
     );
   }
 
@@ -57,28 +60,23 @@ class MonthHeatmapRenderer {
     required Size size,
     required CachedContributionData data,
     required WallpaperConfig config,
-    double pixelRatio = 1.0,
     DateTime? referenceDate,
+    DateTime? todayUtc,
   }) {
-    final themeExt = config.isDarkMode ? AppThemeExtension.dark() : AppThemeExtension.light();
-    
+    final themeExt = config.isDarkMode ? _darkTheme : _lightTheme;
+
     final bgPaint = Paint()
       ..color = config.isDarkMode ? AppTheme.githubDarkCard : AppTheme.bgWhite;
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
 
-    // Audit Fix: Use UTC for consistency
-    final DateTime ref = referenceDate ?? AppDateUtils.nowUtc;
+    final DateTime ref = (referenceDate ?? AppDateUtils.nowUtc).toUtc();
 
-    late final List<MonthHeatmapCell> cells;
-    try {
-      cells = computeMonthCells(referenceDate: ref);
-    } catch (e) {
-      _drawError(canvas, size, config, pixelRatio, e);
-      return;
-    }
+    final cells = computeMonthCells(referenceDate: ref);
 
-    final availableWidth = size.width - config.paddingLeft - config.paddingRight;
-    final availableHeight = size.height - config.paddingTop - config.paddingBottom;
+    final availableWidth =
+        size.width - config.paddingLeft - config.paddingRight;
+    final availableHeight =
+        size.height - config.paddingTop - config.paddingBottom;
 
     final baseScale = config.autoFitWidth
         ? GraphLayoutCalculator.fitScale(
@@ -88,14 +86,14 @@ class MonthHeatmapRenderer {
           )
         : config.scale;
 
-    final effectiveScale = baseScale * pixelRatio;
+    final effectiveScale = baseScale;
     final boxSize = AppConstants.heatmapBoxSize * effectiveScale;
     final spacing = AppConstants.heatmapBoxSpacing * effectiveScale;
     final cellSize = boxSize + spacing;
     final columns = AppConstants.monthGridColumns;
 
     // Calculate Calendar Layout
-    final firstOfMonth = DateTime(ref.year, ref.month, 1);
+    final firstOfMonth = DateTime.utc(ref.year, ref.month, 1);
     final weekdayOffset = firstOfMonth.weekday % 7;
     final totalCells = cells.length + weekdayOffset;
     final dynamicRows = (totalCells / columns).ceil();
@@ -103,12 +101,19 @@ class MonthHeatmapRenderer {
     final gridWidth = (columns * cellSize) - spacing;
     final gridHeight = (dynamicRows * cellSize) - spacing;
 
-    final xStart = config.paddingLeft +
+    final rawXStart = config.paddingLeft +
         ((availableWidth - gridWidth) * config.horizontalPosition);
+    final maxX = size.width - config.paddingRight - gridWidth;
+    final xStart = rawXStart.clamp(
+      config.paddingLeft,
+      maxX < config.paddingLeft ? config.paddingLeft : maxX,
+    );
 
-    final headerColor = (config.isDarkMode ? AppTheme.bgLight : AppTheme.textPrimary).withValues(alpha: 0.8);
+    final headerColor =
+        (config.isDarkMode ? AppTheme.bgLight : AppTheme.textPrimary)
+            .withValues(alpha: 0.8);
     final headerText = RenderUtils.headerTextForDate(ref);
-    
+
     final headerPainter = RenderUtils.drawText(
       canvas: canvas,
       text: headerText,
@@ -141,7 +146,7 @@ class MonthHeatmapRenderer {
       final quoteColor = config.isDarkMode
           ? AppTheme.textWhite.withValues(alpha: config.quoteOpacity)
           : AppTheme.textPrimary.withValues(alpha: config.quoteOpacity);
-      
+
       final quotePainter = RenderUtils.drawText(
         canvas: canvas,
         text: config.customQuote,
@@ -161,25 +166,36 @@ class MonthHeatmapRenderer {
       quoteGap = (spacing * 4).clamp(spacing, boxSize * 1.5);
     }
 
-    final totalBlockHeight = headerPainter.height + headerGap + labelsRowHeight + labelsGap + gridHeight + quoteGap + quoteHeight;
-    final yStartBlock = config.paddingTop +
+    final totalBlockHeight = headerPainter.height +
+        headerGap +
+        labelsRowHeight +
+        labelsGap +
+        gridHeight +
+        quoteGap +
+        quoteHeight;
+    final rawYStartBlock = config.paddingTop +
         ((availableHeight - totalBlockHeight) * config.verticalPosition);
+    final maxY = size.height - config.paddingBottom - totalBlockHeight;
+    final yStartBlock = rawYStartBlock.clamp(
+      config.paddingTop,
+      maxY < config.paddingTop ? config.paddingTop : maxY,
+    );
     final yHeader = yStartBlock;
-    
+
     headerPainter.paint(canvas, Offset(xStart, yHeader));
 
     final yLabels = yHeader + headerPainter.height + headerGap;
     headerPainter.dispose();
 
     for (int i = 0; i < dayLabels.length; i++) {
-        RenderUtils.drawText(
-          canvas: canvas,
-          text: dayLabels[i],
-          style: dayLabelStyle,
-          offset: Offset(xStart + (i * cellSize), yLabels),
-          maxWidth: boxSize,
-          textAlign: TextAlign.center,
-        ).dispose();
+      RenderUtils.drawText(
+        canvas: canvas,
+        text: dayLabels[i],
+        style: dayLabelStyle,
+        offset: Offset(xStart + (i * cellSize), yLabels),
+        maxWidth: boxSize,
+        textAlign: TextAlign.center,
+      ).dispose();
     }
 
     final yStart = yLabels + labelsRowHeight + labelsGap;
@@ -191,9 +207,36 @@ class MonthHeatmapRenderer {
       ..strokeWidth = (spacing / 1.5).clamp(1.0, boxSize * 0.2)
       ..color = themeExt.heatmapTodayHighlight;
 
-    final radius = RenderUtils.getCachedRadius(config.cornerRadius, effectiveScale);
-    final today = AppDateUtils.toDateOnly(AppDateUtils.nowLocal);
+    final radius =
+        RenderUtils.getCachedRadius(config.cornerRadius, effectiveScale);
+    final today =
+        AppDateUtils.toDateOnlyUtc((todayUtc ?? AppDateUtils.nowUtc).toUtc());
     final canPaintText = boxSize >= 12.0;
+    final textColor = config.isDarkMode
+        ? AppTheme.textWhite.withValues(alpha: 0.9)
+        : AppTheme.textPrimary.withValues(alpha: 0.85);
+    final countTextStyle = TextStyle(
+      color: textColor,
+      fontSize: boxSize * 0.45,
+      fontWeight: FontWeight.w600,
+    );
+    final countPainters = <int, TextPainter>{};
+
+    TextPainter getCountPainter(int count) {
+      return countPainters.putIfAbsent(
+        count,
+        () => RenderUtils.drawText(
+          canvas: canvas,
+          text: '$count',
+          style: countTextStyle,
+          offset: Offset.zero,
+          maxWidth: boxSize,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          paint: false,
+        ),
+      );
+    }
 
     for (final cell in cells) {
       final i = cell.dayIndex + weekdayOffset; // Adjust for weekday
@@ -202,9 +245,12 @@ class MonthHeatmapRenderer {
 
       final count = data.getContributionsForDate(cell.date);
       // Audit Fix: Use dynamic quartiles from data
-      final level = RenderUtils.getContributionLevel(count, quartiles: data.quartiles);
-      
-      final cellColor = heatmapLevels.length > level ? heatmapLevels[level] : heatmapLevels[0];
+      final level =
+          RenderUtils.getContributionLevel(count, quartiles: data.quartiles);
+
+      final cellColor = heatmapLevels.length > level
+          ? heatmapLevels[level]
+          : heatmapLevels[0];
       boxPaint.color = cellColor.withValues(alpha: config.opacity);
 
       final x = xStart + (col * cellSize);
@@ -216,34 +262,21 @@ class MonthHeatmapRenderer {
       );
       canvas.drawRRect(rect, boxPaint);
 
-      if (AppDateUtils.isSameDay(AppDateUtils.toDateOnly(cell.date), today)) {
+      if (AppDateUtils.isSameDay(cell.date, today)) {
         canvas.drawRRect(rect, borderPaint);
       }
 
       if (canPaintText && count > 0) {
-        final textColor = config.isDarkMode
-            ? AppTheme.textWhite.withValues(alpha: 0.9)
-            : AppTheme.textPrimary.withValues(alpha: 0.85);
-
-        final textPainter = RenderUtils.drawText(
-          canvas: canvas,
-          text: '$count',
-          style: TextStyle(
-              color: textColor,
-              fontSize: boxSize * 0.45,
-              fontWeight: FontWeight.w600,
-            ),
-          offset: Offset.zero,
-          maxWidth: boxSize,
-          textAlign: TextAlign.center,
-          maxLines: 1,
-          paint: false,
-        );
+        final textPainter = getCountPainter(count);
 
         final textY = y + (boxSize - textPainter.height) / 2;
-        textPainter.paint(canvas, Offset(x + (boxSize - textPainter.width) / 2, textY));
-        textPainter.dispose();
+        textPainter.paint(
+            canvas, Offset(x + (boxSize - textPainter.width) / 2, textY));
       }
+    }
+
+    for (final painter in countPainters.values) {
+      painter.dispose();
     }
 
     if (config.customQuote.isNotEmpty) {
@@ -251,9 +284,9 @@ class MonthHeatmapRenderer {
         canvas: canvas,
         text: config.customQuote,
         style: TextStyle(
-          color: config.isDarkMode 
-            ? AppTheme.textWhite.withValues(alpha: config.quoteOpacity)
-            : AppTheme.textPrimary.withValues(alpha: config.quoteOpacity),
+          color: config.isDarkMode
+              ? AppTheme.textWhite.withValues(alpha: config.quoteOpacity)
+              : AppTheme.textPrimary.withValues(alpha: config.quoteOpacity),
           fontSize: config.quoteFontSize * effectiveScale,
           fontStyle: FontStyle.italic,
         ),
@@ -263,28 +296,5 @@ class MonthHeatmapRenderer {
         maxLines: 3,
       ).dispose();
     }
-  }
-
-  static void _drawError(Canvas canvas, Size size, WallpaperConfig config, double pixelRatio, Object? error) {
-    final effectiveScale = config.scale * pixelRatio;
-    final color = config.isDarkMode ? AppTheme.bgLight : AppTheme.textPrimary;
-    
-    // Audit Fix: Show specific error details
-    final errorMsg = error?.toString() ?? 'Unknown Error';
-    final shortMsg = errorMsg.length > 50 ? '\${errorMsg.substring(0, 47)}...' : errorMsg;
-
-    RenderUtils.drawText(
-      canvas: canvas,
-      text: 'Rendering Error: \$shortMsg',
-      style: TextStyle(
-          color: color.withValues(alpha: 0.8),
-          fontSize: 14 * effectiveScale, // Slightly smaller for error details
-          fontWeight: FontWeight.bold,
-        ),
-      maxWidth: size.width - (40 * effectiveScale),
-      offset: Offset(20 * effectiveScale, (size.height - 20 * effectiveScale) / 2),
-      textAlign: TextAlign.center,
-      maxLines: 2,
-    ).dispose();
   }
 }

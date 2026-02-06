@@ -5,6 +5,21 @@
 import 'package:flutter/foundation.dart';
 import 'utils.dart';
 
+int _toNonNegativeInt(dynamic value, {int fallback = 0}) {
+  if (value is! num) return fallback;
+  final parsed = value.toInt();
+  return parsed >= 0 ? parsed : fallback;
+}
+
+String? _normalizeNonEmptyString(dynamic value) {
+  if (value is! String) return null;
+  final trimmed = value.trim();
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+String _normalizeNameOrFallback(dynamic value, {required String fallback}) {
+  return _normalizeNonEmptyString(value) ?? fallback;
+}
 
 // ══════════════════════════════════════════════════════════════════════════
 // CONTRIBUTION DAY
@@ -22,11 +37,49 @@ class ContributionDay {
   /// GitHub's contribution level string (NONE, FIRST_QUARTILE, etc.)
   final String? contributionLevel;
 
-  const ContributionDay({
-    required this.date,
-    required this.contributionCount,
-    this.contributionLevel,
-  });
+  static const Set<String> _validContributionLevels = {
+    'NONE',
+    'FIRST_QUARTILE',
+    'SECOND_QUARTILE',
+    'THIRD_QUARTILE',
+    'FOURTH_QUARTILE',
+  };
+
+  static const Map<String, int> _contributionLevelRank = {
+    'NONE': 0,
+    'FIRST_QUARTILE': 1,
+    'SECOND_QUARTILE': 2,
+    'THIRD_QUARTILE': 3,
+    'FOURTH_QUARTILE': 4,
+  };
+
+  ContributionDay({
+    required DateTime date,
+    required int contributionCount,
+    String? contributionLevel,
+  })  : date = AppDateUtils.toDateOnlyUtc(date),
+        contributionCount = contributionCount < 0 ? 0 : contributionCount,
+        contributionLevel = contributionCount <= 0
+            ? 'NONE'
+            : _sanitizeContributionLevel(contributionLevel);
+
+  static String? _sanitizeContributionLevel(String? level) {
+    final trimmed = _normalizeNonEmptyString(level);
+    if (trimmed == null) return null;
+    if (_validContributionLevels.contains(trimmed)) return trimmed;
+    debugPrint('ContributionDay: Unknown contribution level "$trimmed"');
+    return null;
+  }
+
+  static String? strongestLevel(String? first, String? second) {
+    final left = _sanitizeContributionLevel(first);
+    final right = _sanitizeContributionLevel(second);
+    if (left == null) return right;
+    if (right == null) return left;
+    final leftRank = _contributionLevelRank[left] ?? -1;
+    final rightRank = _contributionLevelRank[right] ?? -1;
+    return rightRank > leftRank ? right : left;
+  }
 
   /// Create from GitHub API JSON response
   factory ContributionDay.fromJson(Map<String, dynamic> json) {
@@ -39,20 +92,19 @@ class ContributionDay {
     }
 
     final countValue = json['contributionCount'];
-    final count = (countValue is num && countValue >= 0) 
-        ? countValue.toInt() 
-        : 0;
+    final count =
+        (countValue is num && countValue >= 0) ? countValue.toInt() : 0;
 
     return ContributionDay(
       date: parsedDate,
       contributionCount: count,
-      contributionLevel: json['contributionLevel'] as String?,
+      contributionLevel: _normalizeNonEmptyString(json['contributionLevel']),
     );
   }
 
   /// Convert to JSON for storage
   Map<String, dynamic> toJson() => {
-        'date': AppDateUtils.toIsoDateString(date),
+        'date': AppDateUtils.toIsoDateString(AppDateUtils.toDateOnlyUtc(date)),
         'contributionCount': contributionCount,
         'contributionLevel': contributionLevel,
       };
@@ -60,42 +112,27 @@ class ContributionDay {
   /// Whether this day has any contributions
   bool get isActive => contributionCount > 0;
 
-  /// Get visual intensity level (0-4) for heatmap rendering
-  /// Prioritizes GitHub's explicit level, falls back to local thresholds
-  int get intensityLevel {
-    if (contributionLevel != null) {
-      switch (contributionLevel) {
-        case 'NONE': return 0;
-        case 'FIRST_QUARTILE': return 1;
-        case 'SECOND_QUARTILE': return 2;
-        case 'THIRD_QUARTILE': return 3;
-        case 'FOURTH_QUARTILE': return 4;
-      }
-    }
-    
-    // Fallback if level string missing
-    return RenderUtils.getContributionLevel(contributionCount);
+  int getContributionLevel({Quartiles? quartiles}) {
+    return RenderUtils.getContributionLevel(contributionCount,
+        quartiles: quartiles);
   }
 
   /// Get date key for map lookups (YYYY-MM-DD format)
-  String get dateKey => AppDateUtils.createDateKey(date);
+  String get dateKey =>
+      AppDateUtils.toIsoDateString(AppDateUtils.toDateOnlyUtc(date));
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is ContributionDay &&
           runtimeType == other.runtimeType &&
-          AppDateUtils.isSameDay(date, other.date) &&
+          dateKey == other.dateKey &&
           contributionCount == other.contributionCount &&
           contributionLevel == other.contributionLevel;
 
   @override
   int get hashCode =>
-      date.year.hashCode ^
-      date.month.hashCode ^
-      date.day.hashCode ^
-      contributionCount.hashCode ^
-      contributionLevel.hashCode;
+      Object.hash(dateKey, contributionCount, contributionLevel);
 
   @override
   String toString() => '$dateKey: $contributionCount contributions';
@@ -127,8 +164,11 @@ class ContributionStats {
   });
 
   /// Calculate statistics from contribution days
-  factory ContributionStats.fromDays(List<ContributionDay> days) {
-    if (days.isEmpty) {
+  factory ContributionStats.fromDays(List<ContributionDay> days,
+      {DateTime? nowUtc}) {
+    final dailyTotals = _buildDailyTotals(days);
+
+    if (dailyTotals.isEmpty) {
       return const ContributionStats(
         currentStreak: 0,
         longestStreak: 0,
@@ -136,19 +176,21 @@ class ContributionStats {
         activeDaysCount: 0,
         peakDayContributions: 0,
         totalContributions: 0,
-        mostActiveWeekday: 'None',
+        mostActiveWeekday: AppConstants.fallbackWeekday,
       );
     }
 
-    final streaks = _calculateStreaks(days);
-    final todayCount = _getTodayContributions(days);
-    final activeCount = days.where((d) => d.isActive).length;
-    final peak = days.fold(
-        0,
-        (max, day) =>
-            day.contributionCount > max ? day.contributionCount : max);
-    final total = days.fold<int>(0, (sum, d) => sum + d.contributionCount);
-    final weekday = _getMostActiveWeekday(days);
+    final today =
+        AppDateUtils.toDateOnlyUtc((nowUtc ?? AppDateUtils.nowUtc).toUtc());
+    final streaks = _calculateStreaks(dailyTotals, today: today);
+    final todayCount = dailyTotals[today] ?? 0;
+    final activeCount = dailyTotals.values.where((count) => count > 0).length;
+    final peak = dailyTotals.values.fold<int>(
+      0,
+      (maxCount, count) => count > maxCount ? count : maxCount,
+    );
+    final total = dailyTotals.values.fold<int>(0, (sum, count) => sum + count);
+    final weekday = _getMostActiveWeekday(dailyTotals);
 
     return ContributionStats(
       currentStreak: streaks['current']!,
@@ -162,117 +204,98 @@ class ContributionStats {
   }
 
   /// Calculate current and longest streaks from contribution days
-  /// 
-  /// Optimized to O(n) in a single pass.
-  static Map<String, int> _calculateStreaks(List<ContributionDay> days) {
-    if (days.isEmpty) return {'current': 0, 'longest': 0};
-
-    // 5. List Sorting Optimization: Only sort if necessary
-    bool isSorted = true;
-    for (int i = 0; i < days.length - 1; i++) {
-      if (days[i].date.isAfter(days[i + 1].date)) {
-        isSorted = false;
-        break;
-      }
-    }
-
-    final sortedDays = isSorted 
-        ? days 
-        : (List<ContributionDay>.from(days)..sort((a, b) => a.date.compareTo(b.date)));
+  ///
+  /// Missing dates are treated as unknown (do not auto-reset streaks).
+  static Map<String, int> _calculateStreaks(Map<DateTime, int> dailyTotals,
+      {required DateTime today}) {
+    if (dailyTotals.isEmpty) return {'current': 0, 'longest': 0};
 
     int longestStreakCount = 0;
     int tempStreak = 0;
 
-    // Use normalized UTC dates to align with GitHub API (P0 Fix)
-    final today = AppDateUtils.toDateOnly(AppDateUtils.nowUtc);
-    DateTime? lastDate;
+    final sortedDates = dailyTotals.keys.toList()
+      ..sort((a, b) => a.compareTo(b));
+    final earliest = sortedDates.first;
+    final latest = sortedDates.last;
+    final expectedDays =
+        latest.difference(earliest).inDays >= 0 ? latest.difference(earliest).inDays + 1 : 0;
+    final coverage =
+        expectedDays <= 0 ? 1.0 : (dailyTotals.length / expectedDays);
+    final treatMissingAsZero = coverage < 0.90;
 
-    for (final day in sortedDays) {
-      final dayDate = AppDateUtils.toDateOnly(day.date);
-      
-      if (day.isActive) {
-        if (lastDate != null && dayDate.difference(lastDate).inDays == 1) {
-          tempStreak++;
-        } else {
-          // Gap in dates or first active day
-          tempStreak = 1;
+    for (DateTime cursor = earliest;
+        !cursor.isAfter(latest);
+        cursor = cursor.add(const Duration(days: 1))) {
+      final count = dailyTotals[cursor];
+      if (count == null) {
+        if (treatMissingAsZero) {
+          tempStreak = 0;
         }
-        
+        continue;
+      }
+      if (count > 0) {
+        tempStreak++;
         if (tempStreak > longestStreakCount) {
           longestStreakCount = tempStreak;
         }
-        // Fix: Only update lastDate when the day was actually active (P1 Fix)
-        // This prevents inactive days from "bridging" or resetting logic incorrectly
-        lastDate = dayDate;
       } else {
         tempStreak = 0;
       }
     }
 
-    // Current streak calculation
     int currentStreakCount = 0;
-    DateTime? lastActiveDay;
-    for (int i = sortedDays.length - 1; i >= 0; i--) {
-      if (sortedDays[i].isActive) {
-        lastActiveDay = AppDateUtils.toDateOnly(sortedDays[i].date);
-        break;
+
+    DateTime? anchor;
+    final todayCount = dailyTotals[today];
+    if (todayCount != null && todayCount > 0) {
+      anchor = today;
+    } else {
+      final yesterday = today.subtract(const Duration(days: 1));
+      final yesterdayCount = dailyTotals[yesterday];
+      if (yesterdayCount != null && yesterdayCount > 0) {
+        anchor = yesterday;
       }
     }
 
-    if (lastActiveDay != null) {
-      // Fix: Use normalized dates for strict day difference check
-      final diffToToday = today.difference(lastActiveDay).inDays;
-      
-      // Audit Fix: Strict streak calculation (no grace period)
-      // GitHub streaks are strictly based on UTC days.
-      if (diffToToday == 0) {
-        int streak = 0;
-        DateTime expect = lastActiveDay;
-        
-        for (int i = sortedDays.length - 1; i >= 0; i--) {
-          final day = sortedDays[i];
-          final dayDate = AppDateUtils.toDateOnly(day.date);
-          
-          if (dayDate.isAfter(lastActiveDay)) continue;
-          
-          if (AppDateUtils.isSameDay(dayDate, expect)) {
-            if (day.isActive) {
-              streak++;
-              expect = dayDate.subtract(const Duration(days: 1));
-            } else {
-              break;
-            }
-          } else if (dayDate.isBefore(expect)) {
-            break; 
+    if (anchor != null) {
+      for (DateTime cursor = anchor;
+          !cursor.isBefore(earliest);
+          cursor = cursor.subtract(const Duration(days: 1))) {
+        final count = dailyTotals[cursor];
+        if (count == null) {
+          if (treatMissingAsZero) {
+            break;
           }
+          continue;
         }
-        currentStreakCount = streak;
+        if (count <= 0) {
+          break;
+        }
+        currentStreakCount++;
       }
     }
 
     return {'current': currentStreakCount, 'longest': longestStreakCount};
   }
 
-  /// Get contributions for today (UTC to match GitHub)
-  static int _getTodayContributions(List<ContributionDay> days) {
-    // Audit Fix: Use UTC to match GitHub contribution data
-    final today = AppDateUtils.toDateOnly(AppDateUtils.nowUtc);
-    final todayDay = days.firstWhere(
-      (d) => AppDateUtils.isSameDay(d.date, today),
-      orElse: () => ContributionDay(date: today, contributionCount: 0),
-    );
-    return todayDay.contributionCount;
+  static Map<DateTime, int> _buildDailyTotals(List<ContributionDay> days) {
+    final totals = <DateTime, int>{};
+    for (final day in days) {
+      final key = AppDateUtils.toDateOnlyUtc(day.date);
+      totals[key] = (totals[key] ?? 0) + day.contributionCount;
+    }
+    return totals;
   }
 
   /// Find most active weekday
-  static String _getMostActiveWeekday(List<ContributionDay> days) {
-    if (days.isEmpty) return AppConstants.fallbackWeekday;
+  static String _getMostActiveWeekday(Map<DateTime, int> dailyTotals) {
+    if (dailyTotals.isEmpty) return AppConstants.fallbackWeekday;
 
     final weekdayCounts = List.filled(7, 0);
-    for (final day in days) {
-      final weekday = day.date.weekday;
+    for (final entry in dailyTotals.entries) {
+      final weekday = entry.key.weekday;
       if (weekday >= 1 && weekday <= 7) {
-        weekdayCounts[weekday - 1] += day.contributionCount;
+        weekdayCounts[weekday - 1] += entry.value;
       }
     }
 
@@ -301,12 +324,192 @@ class ContributionStats {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// REPOSITORY CONTRIBUTIONS
+// ══════════════════════════════════════════════════════════════════════════
+
+@immutable
+class RepoLanguageSlice {
+  final String name;
+  final String? color;
+  final int size;
+
+  static const String unknownLanguage = 'Unknown';
+
+  RepoLanguageSlice({
+    required String name,
+    required this.color,
+    required int size,
+  })  : name = _normalizeNameOrFallback(name, fallback: unknownLanguage),
+        size = size < 0 ? 0 : size;
+
+  factory RepoLanguageSlice.fromJson(Map<String, dynamic> json) {
+    return RepoLanguageSlice(
+      name: _normalizeNameOrFallback(
+        json['name'],
+        fallback: unknownLanguage,
+      ),
+      color: json['color'] as String?,
+      size: _toNonNegativeInt(json['size']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'color': color,
+        'size': size,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RepoLanguageSlice &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          color == other.color &&
+          size == other.size;
+
+  @override
+  int get hashCode => Object.hash(name, color, size);
+}
+
+@immutable
+class RepoContribution {
+  final String nameWithOwner;
+  final String? url;
+  final bool isPrivate;
+  final int commitCount;
+  final String? primaryLanguageName;
+  final String? primaryLanguageColor;
+  final List<RepoLanguageSlice> languages;
+
+  RepoContribution({
+    required String nameWithOwner,
+    required this.url,
+    required this.isPrivate,
+    required int commitCount,
+    required String? primaryLanguageName,
+    required this.primaryLanguageColor,
+    required List<RepoLanguageSlice> languages,
+  })  : nameWithOwner = _normalizeNameOrFallback(nameWithOwner,
+            fallback: 'unknown/unknown'),
+        commitCount = commitCount < 0 ? 0 : commitCount,
+        primaryLanguageName = _normalizeNonEmptyString(primaryLanguageName),
+        languages = List.unmodifiable(languages);
+
+  factory RepoContribution.fromJson(Map<String, dynamic> json) {
+    final rawLanguages = (json['languages'] as List<dynamic>? ?? const []);
+    final parsedLanguages = <RepoLanguageSlice>[];
+    for (final item in rawLanguages) {
+      if (item is Map<String, dynamic>) {
+        final parsed = RepoLanguageSlice.fromJson(item);
+        if (parsed.name.trim().isEmpty) continue;
+        parsedLanguages.add(parsed);
+      }
+    }
+
+    return RepoContribution(
+      nameWithOwner: _normalizeNameOrFallback(
+        json['nameWithOwner'],
+        fallback: 'unknown/unknown',
+      ),
+      url: json['url'] as String?,
+      isPrivate: json['isPrivate'] as bool? ?? false,
+      commitCount: _toNonNegativeInt(json['commitCount']),
+      primaryLanguageName:
+          _normalizeNonEmptyString(json['primaryLanguageName']),
+      primaryLanguageColor: json['primaryLanguageColor'] as String?,
+      languages: List.unmodifiable(parsedLanguages),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'nameWithOwner': nameWithOwner,
+        'url': url,
+        'isPrivate': isPrivate,
+        'commitCount': commitCount,
+        'primaryLanguageName': primaryLanguageName,
+        'primaryLanguageColor': primaryLanguageColor,
+        'languages': languages.map((l) => l.toJson()).toList(),
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RepoContribution &&
+          runtimeType == other.runtimeType &&
+          nameWithOwner == other.nameWithOwner &&
+          url == other.url &&
+          isPrivate == other.isPrivate &&
+          commitCount == other.commitCount &&
+          primaryLanguageName == other.primaryLanguageName &&
+          primaryLanguageColor == other.primaryLanguageColor &&
+          listEquals(languages, other.languages);
+
+  @override
+  int get hashCode => Object.hash(nameWithOwner, url, isPrivate, commitCount,
+      primaryLanguageName, primaryLanguageColor, Object.hashAll(languages));
+}
+
+@immutable
+class LanguageUsage {
+  final String name;
+  final String? color;
+  final double score;
+  final double percent;
+
+  LanguageUsage({
+    required String name,
+    required this.color,
+    required double score,
+    required double percent,
+  })  : name = _normalizeNameOrFallback(name,
+            fallback: RepoLanguageSlice.unknownLanguage),
+        score = score < 0 ? 0 : score,
+        percent = percent.clamp(0.0, 1.0);
+
+  factory LanguageUsage.fromJson(Map<String, dynamic> json) {
+    return LanguageUsage(
+      name: _normalizeNameOrFallback(
+        json['name'],
+        fallback: RepoLanguageSlice.unknownLanguage,
+      ),
+      color: json['color'] as String?,
+      score: (json['score'] is num) ? (json['score'] as num).toDouble() : 0.0,
+      percent:
+          (json['percent'] is num) ? (json['percent'] as num).toDouble() : 0.0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'color': color,
+        'score': score,
+        'percent': percent,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LanguageUsage &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          color == other.color &&
+          score == other.score &&
+          percent == other.percent;
+
+  @override
+  int get hashCode => Object.hash(name, color, score, percent);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // CACHED CONTRIBUTION DATA
 // ══════════════════════════════════════════════════════════════════════════
 
 /// Complete GitHub contribution data with caching metadata
 @immutable
 class CachedContributionData {
+  static const int _maxTopLanguages = 8;
+
   /// GitHub username
   final String username;
 
@@ -325,21 +528,191 @@ class CachedContributionData {
   /// Dynamic contribution quartiles for heatmap rendering
   final Quartiles quartiles;
 
+  final List<RepoContribution> repositories;
+  final List<LanguageUsage> topLanguages;
+
   /// Pre-computed date lookup map for O(1) access
   final Map<String, ContributionDay> _dateLookupCache;
 
-  CachedContributionData({
+  final int _equalityDigest;
+
+  CachedContributionData._({
     required this.username,
     required this.totalContributions,
     required this.days,
     required this.lastUpdated,
+    required this.stats,
+    required this.quartiles,
+    required this.repositories,
+    required this.topLanguages,
+    required Map<String, ContributionDay> dateLookupCache,
+  })  : _dateLookupCache = dateLookupCache,
+        _equalityDigest = Object.hash(
+          username,
+          totalContributions,
+          lastUpdated,
+          quartiles.q1,
+          quartiles.q2,
+          quartiles.q3,
+          Object.hashAll(days),
+          Object.hashAll(repositories),
+          Object.hashAll(topLanguages),
+        );
+
+  factory CachedContributionData({
+    required String username,
+    required int totalContributions,
+    required List<ContributionDay> days,
+    required DateTime lastUpdated,
     ContributionStats? stats,
     Quartiles? quartiles,
-  })  : stats = stats ?? ContributionStats.fromDays(days),
-        quartiles = quartiles ??
-            RenderUtils.calculateQuartiles(
-                days.map((d) => d.contributionCount).toList()),
-        _dateLookupCache = {for (var day in days) day.dateKey: day};
+    List<RepoContribution>? repositories,
+    List<LanguageUsage>? topLanguages,
+  }) {
+    final normalizedDays = _normalizeAndMergeDays(days);
+    final dailyTotal = normalizedDays.fold<int>(
+      0,
+      (sum, day) => sum + day.contributionCount,
+    );
+    if (totalContributions != dailyTotal) {
+      debugPrint(
+        'CachedContributionData: total mismatch provided=$totalContributions, computed=$dailyTotal',
+      );
+    }
+
+    final safeRepositories = List<RepoContribution>.unmodifiable(
+      repositories ?? const <RepoContribution>[],
+    );
+    final safeTopLanguages = List<LanguageUsage>.unmodifiable(
+      topLanguages ?? _computeTopLanguages(safeRepositories),
+    );
+    final lookup = Map<String, ContributionDay>.unmodifiable({
+      for (final day in normalizedDays) day.dateKey: day,
+    });
+
+    return CachedContributionData._(
+      username: username.trim(),
+      totalContributions: dailyTotal,
+      days: List<ContributionDay>.unmodifiable(normalizedDays),
+      lastUpdated: lastUpdated.toUtc(),
+      stats: stats ?? ContributionStats.fromDays(normalizedDays),
+      quartiles: quartiles ??
+          RenderUtils.calculateQuartiles(
+            normalizedDays.map((d) => d.contributionCount).toList(),
+          ),
+      repositories: safeRepositories,
+      topLanguages: safeTopLanguages,
+      dateLookupCache: lookup,
+    );
+  }
+
+  static List<LanguageUsage> _computeTopLanguages(
+    List<RepoContribution> repositories,
+  ) {
+    final Map<String, double> totals = {};
+    final Map<String, String?> colors = {};
+
+    for (final repo in repositories) {
+      if (repo.commitCount <= 0) continue;
+
+      final slices = repo.languages;
+      final totalSize = slices.fold<int>(0, (sum, s) => sum + s.size);
+      if (totalSize > 0) {
+        for (final s in slices) {
+          if (s.size <= 0) continue;
+          if (s.name == RepoLanguageSlice.unknownLanguage) continue;
+          final contribution = repo.commitCount * (s.size / totalSize);
+          totals[s.name] = (totals[s.name] ?? 0.0) + contribution;
+          colors[s.name] ??= s.color;
+        }
+        continue;
+      }
+
+      final name = repo.primaryLanguageName;
+      if (name != null &&
+          name.trim().isNotEmpty &&
+          name != RepoLanguageSlice.unknownLanguage) {
+        totals[name] = (totals[name] ?? 0.0) + repo.commitCount.toDouble();
+        colors[name] ??= repo.primaryLanguageColor;
+      }
+    }
+
+    final totalScore = totals.values.fold<double>(0.0, (a, b) => a + b);
+    final entries = totals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    final result = <LanguageUsage>[];
+    final maxNamed = entries.length > _maxTopLanguages ? _maxTopLanguages - 1 : _maxTopLanguages;
+    var namedScoreTotal = 0.0;
+    for (final e in entries.take(maxNamed)) {
+      final pct = totalScore <= 0 ? 0.0 : (e.value / totalScore);
+      namedScoreTotal += e.value;
+      result.add(
+        LanguageUsage(
+          name: e.key,
+          color: colors[e.key],
+          score: e.value,
+          percent: pct,
+        ),
+      );
+    }
+    if (entries.length > _maxTopLanguages && totalScore > 0) {
+      final otherScore = (totalScore - namedScoreTotal).clamp(0.0, totalScore);
+      if (otherScore > 0) {
+        result.add(
+          LanguageUsage(
+            name: 'Other',
+            color: null,
+            score: otherScore,
+            percent: otherScore / totalScore,
+          ),
+        );
+      }
+    }
+    return result;
+  }
+
+  static List<ContributionDay> _normalizeAndMergeDays(
+      List<ContributionDay> raw) {
+    final byDate = <String, ContributionDay>{};
+    var duplicateDates = 0;
+
+    for (final day in raw) {
+      final normalizedDay = ContributionDay(
+        date: day.date,
+        contributionCount: day.contributionCount,
+        contributionLevel: day.contributionLevel,
+      );
+      final key = normalizedDay.dateKey;
+      final existing = byDate[key];
+
+      if (existing == null) {
+        byDate[key] = normalizedDay;
+        continue;
+      }
+
+      duplicateDates++;
+      byDate[key] = ContributionDay(
+        date: existing.date,
+        contributionCount:
+            existing.contributionCount + normalizedDay.contributionCount,
+        contributionLevel: ContributionDay.strongestLevel(
+          existing.contributionLevel,
+          normalizedDay.contributionLevel,
+        ),
+      );
+    }
+
+    if (duplicateDates > 0) {
+      debugPrint(
+        'CachedContributionData: merged $duplicateDates duplicate day entries',
+      );
+    }
+
+    final normalizedDays = byDate.values.toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+    return normalizedDays;
+  }
 
   /// Create from GitHub API JSON response
   factory CachedContributionData.fromJson(Map<String, dynamic> json) {
@@ -362,22 +735,50 @@ class CachedContributionData {
     try {
       final lastUpdatedStr = json['lastUpdated'] as String?;
       timestamp = lastUpdatedStr != null
-          ? DateTime.parse(lastUpdatedStr)
+          ? DateTime.parse(lastUpdatedStr).toUtc()
           : AppDateUtils.nowUtc;
     } catch (e) {
-      debugPrint('CachedContributionData: Using current time due to parse error: $e');
+      debugPrint(
+          'CachedContributionData: Using current time due to parse error: $e');
       timestamp = AppDateUtils.nowUtc;
     }
 
-    // Calculate stats from parsed data
-    final calculatedStats = ContributionStats.fromDays(parsedDays);
+    final computedTotal =
+        parsedDays.fold<int>(0, (sum, d) => sum + d.contributionCount);
+    final reportedTotal =
+        _toNonNegativeInt(json['totalContributions'], fallback: computedTotal);
+    if (reportedTotal != computedTotal) {
+      debugPrint(
+        'CachedContributionData: JSON total mismatch reported=$reportedTotal, computed=$computedTotal',
+      );
+    }
+    final reposJson = json['repositories'] as List<dynamic>?;
+    final parsedRepos = <RepoContribution>[];
+    if (reposJson != null) {
+      for (final r in reposJson) {
+        if (r is Map<String, dynamic>) {
+          parsedRepos.add(RepoContribution.fromJson(r));
+        }
+      }
+    }
+
+    final languagesJson = json['topLanguages'] as List<dynamic>?;
+    final parsedLanguages = <LanguageUsage>[];
+    if (languagesJson != null) {
+      for (final l in languagesJson) {
+        if (l is Map<String, dynamic>) {
+          parsedLanguages.add(LanguageUsage.fromJson(l));
+        }
+      }
+    }
 
     return CachedContributionData(
-      username: json['username'] as String? ?? '',
-      totalContributions: json['totalContributions'] as int? ?? 0,
+      username: (json['username'] as String? ?? '').trim(),
+      totalContributions: reportedTotal,
       days: parsedDays,
       lastUpdated: timestamp,
-      stats: calculatedStats,
+      repositories: parsedRepos,
+      topLanguages: parsedLanguages.isEmpty ? null : parsedLanguages,
       // quartiles will be auto-calculated by constructor
     );
   }
@@ -391,18 +792,21 @@ class CachedContributionData {
         'todayCommits': stats.todayContributions,
         'days': days.map((d) => d.toJson()).toList(),
         'lastUpdated': lastUpdated.toIso8601String(),
+        'repositories': repositories.map((r) => r.toJson()).toList(),
+        'topLanguages': topLanguages.map((l) => l.toJson()).toList(),
       };
 
   /// Get contributions for a specific date (fast lookup)
   int getContributionsForDate(DateTime date) {
-    final key = AppDateUtils.createDateKey(date);
+    final key = AppDateUtils.toIsoDateString(AppDateUtils.toDateOnlyUtc(date));
     return _dateLookupCache[key]?.contributionCount ?? 0;
   }
 
   /// Check if cached data is stale
-  bool isStale([Duration? customThreshold]) {
+  bool isStale([Duration? customThreshold, DateTime? now]) {
     final threshold = customThreshold ?? AppConstants.cacheExpiry;
-    return DateTime.now().difference(lastUpdated) > threshold;
+    final refNow = (now ?? DateTime.now()).toUtc();
+    return refNow.difference(lastUpdated.toUtc()) > threshold;
   }
 
   /// Convenience getters delegating to stats
@@ -413,6 +817,9 @@ class CachedContributionData {
   int get peakDay => stats.peakDayContributions;
   String get mostActiveWeekday => stats.mostActiveWeekday;
   bool get hasContributedToday => stats.todayContributions > 0;
+
+  int get activeRepositoriesCount =>
+      repositories.where((r) => r.commitCount > 0).length;
 
   /// Average contributions per active day
   double get averagePerActiveDay {
@@ -425,17 +832,19 @@ class CachedContributionData {
       identical(this, other) ||
       other is CachedContributionData &&
           runtimeType == other.runtimeType &&
+          _equalityDigest == other._equalityDigest &&
           username == other.username &&
           totalContributions == other.totalContributions &&
           lastUpdated == other.lastUpdated &&
-          listEquals(days, other.days);
+          listEquals(days, other.days) &&
+          listEquals(repositories, other.repositories) &&
+          listEquals(topLanguages, other.topLanguages) &&
+          quartiles.q1 == other.quartiles.q1 &&
+          quartiles.q2 == other.quartiles.q2 &&
+          quartiles.q3 == other.quartiles.q3;
 
   @override
-  int get hashCode =>
-      username.hashCode ^
-      totalContributions.hashCode ^
-      lastUpdated.hashCode ^
-      Object.hashAll(days);
+  int get hashCode => _equalityDigest;
 
   @override
   String toString() =>
@@ -506,31 +915,55 @@ class WallpaperConfig {
 
   /// Create from JSON storage
   factory WallpaperConfig.fromJson(Map<String, dynamic> json) {
-    try {
-      return WallpaperConfig(
-        isDarkMode: json['isDarkMode'] as bool? ?? false,
-        verticalPosition: _parseDouble(json['verticalPosition'], 0.5, 0.0, 1.0),
-        horizontalPosition:
-            _parseDouble(json['horizontalPosition'], 0.5, 0.0, 1.0),
-        scale: _parseDouble(
-            json['scale'], AppConstants.defaultWallpaperScale, 0.5, 8.0),
-        autoFitWidth: json['autoFitWidth'] as bool? ?? true,
-        opacity: _parseDouble(
-            json['opacity'], AppConstants.defaultWallpaperOpacity, 0.0, 1.0),
-        customQuote: (json['customQuote'] as String? ?? '').trim(),
-        quoteFontSize: _parseDouble(json['quoteFontSize'], 14.0, 10.0, 40.0),
-        quoteOpacity: _parseDouble(json['quoteOpacity'], 1.0, 0.0, 1.0),
-        paddingTop: _parseDouble(json['paddingTop'], 0.0, 0.0, 500.0),
-        paddingBottom: _parseDouble(json['paddingBottom'], 0.0, 0.0, 500.0),
-        paddingLeft: _parseDouble(json['paddingLeft'], 0.0, 0.0, 500.0),
-        paddingRight: _parseDouble(json['paddingRight'], 0.0, 0.0, 500.0),
-        cornerRadius: _parseDouble(
-            json['cornerRadius'], AppConstants.defaultCornerRadius, 0.0, 20.0),
-      );
-    } catch (e) {
-      debugPrint('WallpaperConfig: Error parsing JSON, using defaults: $e');
-      return WallpaperConfig.defaults();
+    return WallpaperConfig(
+      isDarkMode: _parseBool(json['isDarkMode'], false),
+      verticalPosition: _parseDouble(json['verticalPosition'], 0.5, 0.0, 1.0),
+      horizontalPosition:
+          _parseDouble(json['horizontalPosition'], 0.5, 0.0, 1.0),
+      scale: _parseDouble(
+        json['scale'],
+        AppConstants.defaultWallpaperScale,
+        0.5,
+        8.0,
+      ),
+      autoFitWidth: _parseBool(json['autoFitWidth'], true),
+      opacity: _parseDouble(
+        json['opacity'],
+        AppConstants.defaultWallpaperOpacity,
+        0.0,
+        1.0,
+      ),
+      customQuote: _parseQuote(json['customQuote']),
+      quoteFontSize: _parseDouble(json['quoteFontSize'], 14.0, 10.0, 40.0),
+      quoteOpacity: _parseDouble(json['quoteOpacity'], 1.0, 0.0, 1.0),
+      paddingTop: _parseDouble(json['paddingTop'], 0.0, 0.0, 500.0),
+      paddingBottom: _parseDouble(json['paddingBottom'], 0.0, 0.0, 500.0),
+      paddingLeft: _parseDouble(json['paddingLeft'], 0.0, 0.0, 500.0),
+      paddingRight: _parseDouble(json['paddingRight'], 0.0, 0.0, 500.0),
+      cornerRadius: _parseDouble(
+        json['cornerRadius'],
+        AppConstants.defaultCornerRadius,
+        0.0,
+        20.0,
+      ),
+    );
+  }
+
+  static bool _parseBool(dynamic value, bool defaultValue) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized == 'true' || normalized == '1') return true;
+      if (normalized == 'false' || normalized == '0') return false;
     }
+    return defaultValue;
+  }
+
+  static String _parseQuote(dynamic value) {
+    final trimmed = _normalizeNonEmptyString(value) ?? '';
+    if (trimmed.length <= AppConstants.quoteMaxLength) return trimmed;
+    return trimmed.substring(0, AppConstants.quoteMaxLength);
   }
 
   /// Helper to safely parse and clamp double values
@@ -538,7 +971,8 @@ class WallpaperConfig {
       dynamic value, double defaultValue, double min, double max) {
     if (value == null) return defaultValue;
     final parsed = (value is num) ? value.toDouble() : defaultValue;
-    return parsed.clamp(min, max);
+    if (!parsed.isFinite) return defaultValue;
+    return parsed.clamp(min, max).toDouble();
   }
 
   /// Convert to JSON for storage
@@ -578,19 +1012,49 @@ class WallpaperConfig {
   }) {
     return WallpaperConfig(
       isDarkMode: isDarkMode ?? this.isDarkMode,
-      verticalPosition: verticalPosition ?? this.verticalPosition,
-      horizontalPosition: horizontalPosition ?? this.horizontalPosition,
-      scale: scale ?? this.scale,
+      verticalPosition: _parseDouble(
+          verticalPosition ?? this.verticalPosition, 0.5, 0.0, 1.0),
+      horizontalPosition: _parseDouble(
+        horizontalPosition ?? this.horizontalPosition,
+        0.5,
+        0.0,
+        1.0,
+      ),
+      scale: _parseDouble(
+        scale ?? this.scale,
+        AppConstants.defaultWallpaperScale,
+        0.5,
+        8.0,
+      ),
       autoFitWidth: autoFitWidth ?? this.autoFitWidth,
-      opacity: opacity ?? this.opacity,
-      customQuote: customQuote ?? this.customQuote,
-      quoteFontSize: quoteFontSize ?? this.quoteFontSize,
-      quoteOpacity: quoteOpacity ?? this.quoteOpacity,
-      paddingTop: paddingTop ?? this.paddingTop,
-      paddingBottom: paddingBottom ?? this.paddingBottom,
-      paddingLeft: paddingLeft ?? this.paddingLeft,
-      paddingRight: paddingRight ?? this.paddingRight,
-      cornerRadius: cornerRadius ?? this.cornerRadius,
+      opacity: _parseDouble(
+        opacity ?? this.opacity,
+        AppConstants.defaultWallpaperOpacity,
+        0.0,
+        1.0,
+      ),
+      customQuote: _parseQuote(customQuote ?? this.customQuote),
+      quoteFontSize: _parseDouble(
+        quoteFontSize ?? this.quoteFontSize,
+        14.0,
+        10.0,
+        40.0,
+      ),
+      quoteOpacity:
+          _parseDouble(quoteOpacity ?? this.quoteOpacity, 1.0, 0.0, 1.0),
+      paddingTop: _parseDouble(paddingTop ?? this.paddingTop, 0.0, 0.0, 500.0),
+      paddingBottom:
+          _parseDouble(paddingBottom ?? this.paddingBottom, 0.0, 0.0, 500.0),
+      paddingLeft:
+          _parseDouble(paddingLeft ?? this.paddingLeft, 0.0, 0.0, 500.0),
+      paddingRight:
+          _parseDouble(paddingRight ?? this.paddingRight, 0.0, 0.0, 500.0),
+      cornerRadius: _parseDouble(
+        cornerRadius ?? this.cornerRadius,
+        AppConstants.defaultCornerRadius,
+        0.0,
+        20.0,
+      ),
     );
   }
 
@@ -635,4 +1099,3 @@ class WallpaperConfig {
   String toString() =>
       'WallpaperConfig(dark: $isDarkMode, scale: $scale, opacity: $opacity)';
 }
-

@@ -12,9 +12,9 @@ import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // Brand Colors
-  static const Color seedColor = Color(0xFF3B82F6); // Primary Blue
-  static const Color accentPurple = Color(0xFF8B5CF6);
-  static const Color accentTeal = Color(0xFF14B8A6);
+  static const Color seedColor = Color(0xFF0969DA);
+  static const Color accentPurple = Color(0xFF8250DF);
+  static const Color accentTeal = Color(0xFF1B7C83);
 
   // ════════════════════════════════════════════════════════════════════════
   // ☀️ LIGHT THEME
@@ -23,17 +23,40 @@ class AppTheme {
   static ThemeData lightTheme(BuildContext context) {
     final base = ThemeData(
       useMaterial3: true,
-      colorSchemeSeed: seedColor,
+      colorScheme: const ColorScheme(
+        brightness: Brightness.light,
+        primary: Color(0xFF0969DA),
+        onPrimary: Colors.white,
+        secondary: Color(0xFF1F883D),
+        onSecondary: Colors.white,
+        error: Color(0xFFCF222E),
+        onError: Colors.white,
+        surface: Color(0xFFFFFFFF),
+        onSurface: Color(0xFF24292F),
+        surfaceContainerHighest: Color(0xFFF6F8FA),
+        outline: Color(0xFFD0D7DE),
+      ),
       brightness: Brightness.light,
     );
 
     return base.copyWith(
       textTheme: GoogleFonts.interTextTheme(base.textTheme),
+      scaffoldBackgroundColor: const Color(0xFFF6F8FA),
       extensions: [
         AppThemeExtension.light(),
       ],
       appBarTheme: base.appBarTheme.copyWith(
         systemOverlayStyle: _lightOverlayStyle,
+      ),
+      navigationBarTheme: base.navigationBarTheme.copyWith(
+        backgroundColor: const Color(0xFFFFFFFF),
+        indicatorColor: const Color(0x1A0969DA),
+        labelTextStyle: WidgetStateProperty.all(
+          const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
       ),
     );
   }
@@ -45,17 +68,40 @@ class AppTheme {
   static ThemeData darkTheme(BuildContext context) {
     final base = ThemeData(
       useMaterial3: true,
-      colorSchemeSeed: seedColor,
+      colorScheme: const ColorScheme(
+        brightness: Brightness.dark,
+        primary: Color(0xFF2F81F7),
+        onPrimary: Color(0xFF0D1117),
+        secondary: Color(0xFF3FB950),
+        onSecondary: Color(0xFF0D1117),
+        error: Color(0xFFFF7B72),
+        onError: Color(0xFF0D1117),
+        surface: Color(0xFF161B22),
+        onSurface: Color(0xFFC9D1D9),
+        surfaceContainerHighest: Color(0xFF0D1117),
+        outline: Color(0xFF30363D),
+      ),
       brightness: Brightness.dark,
     );
 
     return base.copyWith(
       textTheme: GoogleFonts.interTextTheme(base.textTheme),
+      scaffoldBackgroundColor: const Color(0xFF0D1117),
       extensions: [
         AppThemeExtension.dark(),
       ],
       appBarTheme: base.appBarTheme.copyWith(
         systemOverlayStyle: _darkOverlayStyle,
+      ),
+      navigationBarTheme: base.navigationBarTheme.copyWith(
+        backgroundColor: const Color(0xFF161B22),
+        indicatorColor: const Color(0x1A2F81F7),
+        labelTextStyle: WidgetStateProperty.all(
+          const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
       ),
     );
   }
@@ -67,7 +113,7 @@ class AppTheme {
   static const SystemUiOverlayStyle _lightOverlayStyle = SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,
-    systemNavigationBarColor: Colors.white,
+    systemNavigationBarColor: Color(0xFFF6F8FA),
     systemNavigationBarIconBrightness: Brightness.dark,
   );
 
@@ -84,9 +130,8 @@ class AppTheme {
 
   static const LinearGradient headerGradient = LinearGradient(
     colors: [
-      Color(0xFF6366F1), // Indigo
-      Color(0xFF8B5CF6), // Purple
-      Color(0xFFEC4899), // Pink
+      Color(0xFF0969DA),
+      Color(0xFF2F81F7),
     ],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
@@ -94,13 +139,12 @@ class AppTheme {
 
   static const LinearGradient backgroundGradient = LinearGradient(
     colors: [
-      Color(0xFFEFF6FF), // Very light blue
-      Color(0xFFFAF5FF), // Very light purple
-      Color(0xFFF0FDFA), // Very light teal
+      Color(0xFFF6F8FA),
+      Color(0xFFFFFFFF),
     ],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    stops: [0.0, 0.5, 1.0],
+    stops: [0.0, 1.0],
   );
 
   // ════════════════════════════════════════════════════════════════════════
@@ -111,31 +155,31 @@ class AppTheme {
   static ThemeData theme(BuildContext context) => lightTheme(context);
   
   // Colors - Functional
-  static const Color primaryBlue = Color(0xFF3B82F6);
-  static const Color successGreen = Color(0xFF10B981);
-  static const Color errorRed = Color(0xFFEF4444);
-  static const Color warningOrange = Color(0xFFF59E0B);
+  static const Color primaryBlue = Color(0xFF0969DA);
+  static const Color successGreen = Color(0xFF1F883D);
+  static const Color errorRed = Color(0xFFCF222E);
+  static const Color warningOrange = Color(0xFF9A6700);
   
   // Colors - Backgrounds
   static const Color bgWhite = Color(0xFFFFFFFF);
-  static const Color bgLight = Color(0xFFF8FAFC);
+  static const Color bgLight = Color(0xFFF6F8FA);
   
   // Colors - Text
   static const Color textWhite = Color(0xFFFFFFFF);
-  static const Color textPrimary = Color(0xFF0F172A);
-  static const Color textSecondary = Color(0xFF64748B);
-  static const Color textTertiary = Color(0xFF94A3B8);
+  static const Color textPrimary = Color(0xFF24292F);
+  static const Color textSecondary = Color(0xFF57606A);
+  static const Color textTertiary = Color(0xFF6E7781);
   
   // Colors - Borders
-  static const Color borderLight = Color(0xFFE2E8F0);
+  static const Color borderLight = Color(0xFFD0D7DE);
   static const Color previewBorder = Color(0xFF222222);
 
   // Colors - Stat cards (semantic icons)
   static const Color statOrange = Color(0xFFFF9500);
-  static const Color statAmber = Color(0xFFF59E0B);
-  static const Color statBlue = Color(0xFF3B82F6);
-  static const Color statPurple = Color(0xFF8B5CF6);
-  static const Color statTeal = Color(0xFF14B8A6);
+  static const Color statAmber = Color(0xFF9A6700);
+  static const Color statBlue = Color(0xFF0969DA);
+  static const Color statPurple = Color(0xFF8250DF);
+  static const Color statTeal = Color(0xFF1B7C83);
 
   // Colors - GitHub dark palette (cards, dark surfaces)
   static const Color githubDarkBg = Color(0xFF0D1117);
@@ -243,32 +287,42 @@ class AppThemeExtension extends ThemeExtension<AppThemeExtension> {
 
   // Light Mode
   factory AppThemeExtension.light() {
+    const levels = [
+      Color(0xFFEBEDF0),
+      Color(0xFF9BE9A8),
+      Color(0xFF40C463),
+      Color(0xFF30A14E),
+      Color(0xFF216E39),
+    ];
+    assert(levels.length == 5);
+    assert(levels[1] == Color(0xFF9BE9A8));
+    assert(levels[4] == Color(0xFF216E39));
+
     return const AppThemeExtension(
       headerGradient: AppTheme.headerGradient,
       backgroundGradient: AppTheme.backgroundGradient,
-      heatmapLevels: [
-        Color(0xFFEBEDF0), // Level 0 (Empty)
-        Color(0xFF9BE9A8), // Level 1
-        Color(0xFF40C463), // Level 2
-        Color(0xFF30A14E), // Level 3
-        Color(0xFF216E39), // Level 4
-      ],
+      heatmapLevels: levels,
       heatmapTodayHighlight: Color(0xFFFF9500),
     );
   }
 
   // Dark Mode
   factory AppThemeExtension.dark() {
+    const levels = [
+      Color(0xFF161B22),
+      Color(0xFF9BE9A8),
+      Color(0xFF40C463),
+      Color(0xFF30A14E),
+      Color(0xFF216E39),
+    ];
+    assert(levels.length == 5);
+    assert(levels[0] == Color(0xFF161B22));
+    assert(levels[4] == Color(0xFF216E39));
+
     return const AppThemeExtension(
       headerGradient: AppTheme.headerGradient,
       backgroundGradient: AppTheme.backgroundGradient,
-      heatmapLevels: [
-        Color(0xFF161B22), // Level 0 (Empty)
-        Color(0xFF0E4429), // Level 1
-        Color(0xFF006D32), // Level 2
-        Color(0xFF26A641), // Level 3
-        Color(0xFF39D353), // Level 4
-      ],
+      heatmapLevels: levels,
       heatmapTodayHighlight: Color(0xFFFF9500),
     );
   }
@@ -331,4 +385,186 @@ class AppThemeExtension extends ThemeExtension<AppThemeExtension> {
 extension ThemeGetter on BuildContext {
   AppThemeExtension get appTheme => AppThemeExtension.of(this);
   bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;
+}
+
+class AppCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final VoidCallback? onTap;
+
+  const AppCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(AppTheme.spacing20),
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final content = Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+        border: Border.all(color: scheme.outline.withValues(alpha: 0.8)),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: child,
+    );
+
+    if (onTap == null) return content;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+        onTap: onTap,
+        child: content,
+      ),
+    );
+  }
+}
+
+class AppSectionHeader extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+
+  const AppSectionHeader({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontSize: AppTheme.fontSizeTitle,
+                  fontWeight: FontWeight.w700,
+                  height: 1.1,
+                ),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: AppTheme.spacing4),
+                Text(
+                  subtitle!,
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.72),
+                    fontSize: AppTheme.fontSizeBody,
+                    fontWeight: FontWeight.w500,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (trailing != null) ...[
+          const SizedBox(width: AppTheme.spacing12),
+          trailing!,
+        ],
+      ],
+    );
+  }
+}
+
+class MetricTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color? iconColor;
+  final String? helper;
+  final VoidCallback? onTap;
+
+  const MetricTile({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.iconColor,
+    this.helper,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final c = iconColor ?? scheme.primary;
+
+    return AppCard(
+      padding: const EdgeInsets.all(AppTheme.spacing16),
+      onTap: onTap,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: c.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+              border: Border.all(color: c.withValues(alpha: 0.20)),
+            ),
+            child: Icon(icon, color: c, size: 20),
+          ),
+          const SizedBox(width: AppTheme.spacing12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontSize: AppTheme.fontSizeHeadline,
+                    fontWeight: FontWeight.w800,
+                    height: 1.0,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: AppTheme.spacing4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.72),
+                    fontSize: AppTheme.fontSizeBody,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (helper != null) ...[
+                  const SizedBox(height: AppTheme.spacing4),
+                  Text(
+                    helper!,
+                    style: TextStyle(
+                      color: scheme.onSurface.withValues(alpha: 0.60),
+                      fontSize: AppTheme.fontSizeCaption,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

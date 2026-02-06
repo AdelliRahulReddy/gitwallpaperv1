@@ -4,7 +4,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:github_wallpaper/services.dart';
-import 'package:github_wallpaper/theme.dart';
+import 'package:github_wallpaper/app_theme.dart';
 import 'package:github_wallpaper/utils.dart';
 import 'package:github_wallpaper/pages/onboarding_page.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -125,6 +125,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppTheme.spacing20),
       child: Column(
@@ -132,22 +133,10 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           const SizedBox(height: AppTheme.spacing16),
 
-          // Title
-          const Text(
-            'Settings',
-            style: TextStyle(
-              fontSize: AppTheme.fontSizeHeadline,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Manage your account and preferences',
-            style: TextStyle(
-              fontSize: AppTheme.fontSizeBase,
-              color: AppTheme.textSecondary,
-            ),
+          AppSectionHeader(
+            title: 'Settings',
+            subtitle: 'Manage your account and preferences',
+            trailing: Icon(Icons.tune_rounded, color: scheme.primary),
           ),
 
           const SizedBox(height: AppTheme.spacing24),
@@ -186,21 +175,13 @@ class _SettingsPageState extends State<SettingsPage> {
   // ══════════════════════════════════════════════════════════════════════
 
   Widget _buildAccountSection() {
-    return Container(
-      padding: const EdgeInsets.all(AppTheme.spacing20),
-      decoration: AppTheme.whiteCard(),
+    final scheme = Theme.of(context).colorScheme;
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Account',
-            style: TextStyle(
-              fontSize: AppTheme.fontSizeLead,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
+          const AppSectionHeader(title: 'Account'),
+          const SizedBox(height: AppTheme.spacing16),
 
           // Username
           Row(
@@ -209,12 +190,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  gradient: AppTheme.headerGradient,
-                  borderRadius: BorderRadius.circular(12),
+                  color: scheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                  border: Border.all(color: scheme.primary.withValues(alpha: 0.20)),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.person,
-                  color: AppTheme.textWhite,
+                  color: scheme.primary,
                   size: 24,
                 ),
               ),
@@ -225,10 +207,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   children: [
                     Text(
                       _username ?? 'Unknown',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        color: scheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -236,7 +218,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       'GitHub Account',
                       style: TextStyle(
                         fontSize: 13,
-                        color: AppTheme.textSecondary,
+                        color: scheme.onSurface.withValues(alpha: 0.72),
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -245,29 +228,31 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: AppTheme.spacing16),
 
           // Last Sync
           if (_lastUpdate != null)
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppTheme.bgLight,
+                color: scheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                border: Border.all(color: scheme.outline.withValues(alpha: 0.55)),
               ),
               child: Row(
                 children: [
                   Icon(
                     Icons.sync,
                     size: 18,
-                    color: AppTheme.textSecondary,
+                    color: scheme.onSurface.withValues(alpha: 0.72),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     'Last synced: ${_getTimeSince(_lastUpdate!)}',
                     style: TextStyle(
                       fontSize: 13,
-                      color: AppTheme.textSecondary,
+                      color: scheme.onSurface.withValues(alpha: 0.72),
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -283,21 +268,13 @@ class _SettingsPageState extends State<SettingsPage> {
   // ══════════════════════════════════════════════════════════════════════
 
   Widget _buildPreferencesSection() {
-    return Container(
-      padding: const EdgeInsets.all(AppTheme.spacing20),
-      decoration: AppTheme.whiteCard(),
+    final scheme = Theme.of(context).colorScheme;
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Preferences',
-            style: TextStyle(
-              fontSize: AppTheme.fontSizeLead,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
+          const AppSectionHeader(title: 'Preferences'),
+          const SizedBox(height: AppTheme.spacing16),
 
           // Auto Update Toggle
           Row(
@@ -306,12 +283,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryBlue.withValues(alpha: 0.1),
+                  color: scheme.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(AppTheme.radius10),
+                  border: Border.all(color: scheme.primary.withValues(alpha: 0.20)),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.autorenew,
-                  color: AppTheme.primaryBlue,
+                  color: scheme.primary,
                   size: 20,
                 ),
               ),
@@ -320,12 +298,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Auto Update',
                       style: TextStyle(
                         fontSize: AppTheme.fontSizeMedium,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        color: scheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -333,7 +311,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       'Refresh wallpaper when push notification arrives',
                       style: TextStyle(
                         fontSize: AppTheme.fontSizeBody,
-                        color: AppTheme.textSecondary,
+                        color: scheme.onSurface.withValues(alpha: 0.72),
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -360,21 +339,12 @@ class _SettingsPageState extends State<SettingsPage> {
   // ══════════════════════════════════════════════════════════════════════
 
   Widget _buildDataSection() {
-    return Container(
-      padding: const EdgeInsets.all(AppTheme.spacing20),
-      decoration: AppTheme.whiteCard(),
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Data',
-            style: TextStyle(
-              fontSize: AppTheme.fontSizeLead,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
+          const AppSectionHeader(title: 'Data'),
+          const SizedBox(height: AppTheme.spacing16),
 
           // Clear Cache Button
           _buildSettingButton(
@@ -394,21 +364,12 @@ class _SettingsPageState extends State<SettingsPage> {
   // ══════════════════════════════════════════════════════════════════════
 
   Widget _buildAboutSection() {
-    return Container(
-      padding: const EdgeInsets.all(AppTheme.spacing20),
-      decoration: AppTheme.whiteCard(),
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'About',
-            style: TextStyle(
-              fontSize: AppTheme.fontSizeLead,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
+          const AppSectionHeader(title: 'About'),
+          const SizedBox(height: AppTheme.spacing16),
 
           // App Version
           _buildSettingButton(
